@@ -1,11 +1,11 @@
-import { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { Router } from 'express';
 import { getWorldRepository } from '../../db/worldRepository';
 
-const tagsRoute: FastifyPluginAsync = async (fastify: FastifyInstance) => {
-  fastify.get('/api/tags', async () => {
-    const tags = getWorldRepository().getUniqueTags();
-    return { tags };
-  });
-};
+const router = Router();
 
-export default tagsRoute;
+router.get('/api/tags', (_request, response) => {
+  const tags = getWorldRepository().getUniqueTags();
+  response.send({ tags });
+});
+
+export default router;

@@ -1,15 +1,15 @@
-import { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { Router } from 'express';
 import { getWorldRepository } from '../../db/worldRepository';
 
-const healthRoute: FastifyPluginAsync = async (fastify: FastifyInstance) => {
-  fastify.get('/api/health', async () => {
-    const count = getWorldRepository().count();
-    return {
-      status: 'ok',
-      worldCount: count,
-      dbVersion: 1
-    };
-  });
-};
+const router = Router();
 
-export default healthRoute;
+router.get('/api/health', (_request, response) => {
+  const count = getWorldRepository().count();
+  response.send({
+    status: 'ok',
+    worldCount: count,
+    dbVersion: 1
+  });
+});
+
+export default router;

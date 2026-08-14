@@ -1,4 +1,5 @@
-import { FastifyInstance } from 'fastify';
+import { Express } from 'express';
+import request from 'supertest';
 
 jest.mock('../config', () => ({
   __esModule: true,
@@ -63,49 +64,40 @@ const VALID_BODY = {
 };
 
 describe('API mutations', () => {
-  let app: FastifyInstance;
+  let app: Express;
 
   beforeEach(() => {
     app = createApiServer();
   });
 
-  afterEach(async () => {
-    await app.close();
+  afterEach(() => {
     jest.clearAllMocks();
   });
 
   describe('POST /api/worlds', () => {
     it('returns 401 without a token', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/worlds',
-        payload: VALID_BODY
-      });
+      const response = await request(app).post('/api/worlds').send(VALID_BODY);
 
-      expect(response.statusCode).toBe(401);
+      expect(response.status).toBe(401);
     });
 
     it('returns 400 on invalid body', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/worlds',
-        headers: AUTH,
-        payload: { guildId: 'guild-1' }
-      });
+      const response = await request(app)
+        .post('/api/worlds')
+        .set(AUTH)
+        .send({ guildId: 'guild-1' });
 
-      expect(response.statusCode).toBe(400);
-      expect(JSON.parse(response.body).error).toContain('Invalid body');
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid body');
     });
 
     it('returns 400 on malformed worldId', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/worlds',
-        headers: AUTH,
-        payload: { ...VALID_BODY, worldId: 'not-a-world-id' }
-      });
+      const response = await request(app)
+        .post('/api/worlds')
+        .set(AUTH)
+        .send({ ...VALID_BODY, worldId: 'not-a-world-id' });
 
-      expect(response.statusCode).toBe(400);
+      expect(response.status).toBe(400);
     });
 
     it('returns 201 with full record (including guildId/messageId/vrchatData) when new', async () => {
@@ -130,15 +122,13 @@ describe('API mutations', () => {
         }
       });
 
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/worlds',
-        headers: AUTH,
-        payload: VALID_BODY
-      });
+      const response = await request(app)
+        .post('/api/worlds')
+        .set(AUTH)
+        .send(VALID_BODY);
 
-      expect(response.statusCode).toBe(201);
-      const body = JSON.parse(response.body);
+      expect(response.status).toBe(201);
+      const body = response.body;
       expect(body.duplicate).toBe(false);
       expect(body.world.worldId).toBe(VALID_BODY.worldId);
       expect(body.world.name).toBe('Midnight Bar');
@@ -171,15 +161,13 @@ describe('API mutations', () => {
         }
       });
 
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/worlds',
-        headers: AUTH,
-        payload: VALID_BODY
-      });
+      const response = await request(app)
+        .post('/api/worlds')
+        .set(AUTH)
+        .send(VALID_BODY);
 
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
+      expect(response.status).toBe(200);
+      const body = response.body;
       expect(body.duplicate).toBe(true);
       expect(body.existingMessageId).toBe('1240000000000000000');
     });
@@ -193,15 +181,13 @@ describe('API mutations', () => {
         )
       );
 
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/worlds',
-        headers: AUTH,
-        payload: VALID_BODY
-      });
+      const response = await request(app)
+        .post('/api/worlds')
+        .set(AUTH)
+        .send(VALID_BODY);
 
-      expect(response.statusCode).toBe(502);
-      expect(JSON.parse(response.body)).toEqual({
+      expect(response.status).toBe(502);
+      expect(response.body).toEqual({
         error: 'Failed to fetch world data from VRChat'
       });
     });
@@ -213,14 +199,12 @@ describe('API mutations', () => {
         createMockRepo({ deleteByWorldAndGuild: jest.fn(() => true) })
       );
 
-      const response = await app.inject({
-        method: 'DELETE',
-        url: `/api/worlds/${VALID_BODY.worldId}`,
-        headers: AUTH,
-        payload: { guildId: 'guild-1' }
-      });
+      const response = await request(app)
+        .delete(`/api/worlds/${VALID_BODY.worldId}`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1' });
 
-      expect(response.statusCode).toBe(204);
+      expect(response.status).toBe(204);
     });
 
     it('returns 404 when record does not exist', async () => {
@@ -228,25 +212,21 @@ describe('API mutations', () => {
         createMockRepo({ deleteByWorldAndGuild: jest.fn(() => false) })
       );
 
-      const response = await app.inject({
-        method: 'DELETE',
-        url: `/api/worlds/${VALID_BODY.worldId}`,
-        headers: AUTH,
-        payload: { guildId: 'guild-1' }
-      });
+      const response = await request(app)
+        .delete(`/api/worlds/${VALID_BODY.worldId}`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1' });
 
-      expect(response.statusCode).toBe(404);
+      expect(response.status).toBe(404);
     });
 
     it('returns 400 when guildId is missing', async () => {
-      const response = await app.inject({
-        method: 'DELETE',
-        url: `/api/worlds/${VALID_BODY.worldId}`,
-        headers: AUTH,
-        payload: {}
-      });
+      const response = await request(app)
+        .delete(`/api/worlds/${VALID_BODY.worldId}`)
+        .set(AUTH)
+        .send({});
 
-      expect(response.statusCode).toBe(400);
+      expect(response.status).toBe(400);
     });
   });
 
@@ -259,15 +239,13 @@ describe('API mutations', () => {
         })
       );
 
-      const response = await app.inject({
-        method: 'PUT',
-        url: `/api/worlds/${VALID_BODY.worldId}/quality`,
-        headers: AUTH,
-        payload: { guildId: 'guild-1', quality: 'good' }
-      });
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/quality`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', quality: 'good' });
 
-      expect(response.statusCode).toBe(200);
-      expect(JSON.parse(response.body)).toEqual({ updated: true });
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ updated: true });
     });
 
     it('returns 200 with updated: false when quality is unchanged', async () => {
@@ -278,26 +256,22 @@ describe('API mutations', () => {
         })
       );
 
-      const response = await app.inject({
-        method: 'PUT',
-        url: `/api/worlds/${VALID_BODY.worldId}/quality`,
-        headers: AUTH,
-        payload: { guildId: 'guild-1', quality: 'bad' }
-      });
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/quality`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', quality: 'bad' });
 
-      expect(response.statusCode).toBe(200);
-      expect(JSON.parse(response.body)).toEqual({ updated: false });
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ updated: false });
     });
 
     it('returns 400 on invalid quality value', async () => {
-      const response = await app.inject({
-        method: 'PUT',
-        url: `/api/worlds/${VALID_BODY.worldId}/quality`,
-        headers: AUTH,
-        payload: { guildId: 'guild-1', quality: 'amazing' }
-      });
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/quality`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', quality: 'amazing' });
 
-      expect(response.statusCode).toBe(400);
+      expect(response.status).toBe(400);
     });
 
     it('returns 404 when world does not exist', async () => {
@@ -305,14 +279,12 @@ describe('API mutations', () => {
         createMockRepo({ getByWorldAndGuild: jest.fn(() => undefined) })
       );
 
-      const response = await app.inject({
-        method: 'PUT',
-        url: `/api/worlds/${VALID_BODY.worldId}/quality`,
-        headers: AUTH,
-        payload: { guildId: 'guild-1', quality: 'bad' }
-      });
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/quality`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', quality: 'bad' });
 
-      expect(response.statusCode).toBe(404);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -325,30 +297,26 @@ describe('API mutations', () => {
         })
       );
 
-      const response = await app.inject({
-        method: 'PUT',
-        url: `/api/worlds/${VALID_BODY.worldId}/tags`,
-        headers: AUTH,
-        payload: {
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags`)
+        .set(AUTH)
+        .send({
           guildId: 'guild-1',
           tags: ['horror', 'game'],
           sourceContent: 'some source'
-        }
-      });
+        });
 
-      expect(response.statusCode).toBe(200);
-      expect(JSON.parse(response.body)).toEqual({ updated: true });
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ updated: true });
     });
 
     it('returns 400 when tags is not an array of strings', async () => {
-      const response = await app.inject({
-        method: 'PUT',
-        url: `/api/worlds/${VALID_BODY.worldId}/tags`,
-        headers: AUTH,
-        payload: { guildId: 'guild-1', tags: 'horror' }
-      });
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', tags: 'horror' });
 
-      expect(response.statusCode).toBe(400);
+      expect(response.status).toBe(400);
     });
 
     it('returns 404 when world does not exist', async () => {
@@ -356,18 +324,16 @@ describe('API mutations', () => {
         createMockRepo({ getByWorldAndGuild: jest.fn(() => undefined) })
       );
 
-      const response = await app.inject({
-        method: 'PUT',
-        url: `/api/worlds/${VALID_BODY.worldId}/tags`,
-        headers: AUTH,
-        payload: {
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags`)
+        .set(AUTH)
+        .send({
           guildId: 'guild-1',
           tags: ['horror'],
           sourceContent: null
-        }
-      });
+        });
 
-      expect(response.statusCode).toBe(404);
+      expect(response.status).toBe(404);
     });
   });
 

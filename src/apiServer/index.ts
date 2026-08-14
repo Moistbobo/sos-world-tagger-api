@@ -1,12 +1,11 @@
-import Fastify, { FastifyInstance } from 'fastify';
-import cors from '@fastify/cors';
+import express, { Express, NextFunction, Request, Response } from 'express';
 import Config from '../config';
 import healthRoute from './routes/health';
 import worldsRoute from './routes/worlds';
 import tagsRoute from './routes/tags';
 import metaRoute from './routes/meta';
 import worldsMutationsRoute from './routes/worldsMutations';
-import registerErrorHandler from './plugins/errorHandler';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 function normalizeOrigin(origin: string): string {
   return origin.trim().replace(/\/$/, '').toLowerCase();
@@ -47,77 +46,100 @@ function isAllowedIp(ip: string | undefined): boolean {
   return Config.API_ALLOWED_IPS.includes(ip);
 }
 
-export function createApiServer(): FastifyInstance {
-  const fastify = Fastify({
-    logger: false, // we'll use our own logger
-    // Trust loopback reverse proxies (Caddy/Nginx on the same host) when IP
-    // allowlisting is enabled so request.ip reflects the real client IP.
-    trustProxy:
-      Config.API_ALLOWED_IPS.length > 0 ? ['127.0.0.1/32', '::1/128'] : false
-  });
+// Origin + IP validation (skip health endpoint so monitoring can still ping it).
+function restrictionsMiddleware(
+  request: Request,
+  response: Response,
+  next: NextFunction
+) {
+  if (request.path === '/api/health') return next();
 
-  registerErrorHandler(fastify);
+  const restrictionsDisabled = areApiRestrictionsDisabled();
+  const hasOriginRules =
+    !restrictionsDisabled && Config.API_ALLOWED_ORIGINS.length > 0;
+  const hasIpRules = !restrictionsDisabled && Config.API_ALLOWED_IPS.length > 0;
+
+  // Nothing configured; let auth handle access control.
+  if (!hasOriginRules && !hasIpRules) return next();
+
+  const originOk = hasOriginRules && isAllowedOrigin(request.headers.origin);
+  const ipOk = hasIpRules && isAllowedIp(request.ip);
+
+  // Request must satisfy at least one configured restriction.
+  if (!originOk && !ipOk) {
+    return response.status(403).send({ error: 'Forbidden' });
+  }
+  return next();
+}
+
+// Bearer token auth (skip health endpoint)
+function authMiddleware(
+  request: Request,
+  response: Response,
+  next: NextFunction
+) {
+  if (request.path === '/api/health') return next();
+
+  const auth = request.headers.authorization;
+  if (!auth || !auth.toLowerCase().startsWith('bearer ')) {
+    return response.status(401).send({ error: 'Unauthorized' });
+  }
+
+  const token = auth.slice(7).trim();
+  if (!Config.API_TOKEN.includes(token)) {
+    return response.status(401).send({ error: 'Unauthorized' });
+  }
+  return next();
+}
+
+export function createApiServer(): Express {
+  const app = express();
+  app.use(express.json());
+
+  // Trust loopback reverse proxies (Caddy/Nginx on the same host) when IP
+  // allowlisting is enabled so request.ip reflects the real client IP.
+  if (Config.API_ALLOWED_IPS.length > 0) {
+    app.set('trust proxy', ['127.0.0.1/32', '::1/128']);
+  }
 
   // CORS: allow configured origins, or fall back to wildcard for backwards compatibility.
   // Patterns may contain '*' as a wildcard for one path/domain segment.
   const restrictionsDisabled = areApiRestrictionsDisabled();
-  const corsOptions = restrictionsDisabled
-    ? { origin: '*' }
-    : Config.API_ALLOWED_ORIGINS.length > 0
-      ? {
-          origin: (
-            origin: string | undefined,
-            cb: (err: Error | null, allow: boolean) => void
-          ) => {
-            cb(null, isAllowedOrigin(origin));
-          }
-        }
-      : { origin: '*' };
-  void fastify.register(cors, corsOptions);
+  app.use((request, response, next) => {
+    const origin = request.headers.origin;
+    if (!origin) return next();
 
-  // Origin + IP validation hook (skip health endpoint so monitoring can still ping it).
-  fastify.addHook('onRequest', async (request, reply) => {
-    if (request.url === '/api/health') return;
-
-    const restrictionsDisabled = areApiRestrictionsDisabled();
-    const hasOriginRules =
-      !restrictionsDisabled && Config.API_ALLOWED_ORIGINS.length > 0;
-    const hasIpRules =
-      !restrictionsDisabled && Config.API_ALLOWED_IPS.length > 0;
-
-    // Nothing configured; let auth handle access control.
-    if (!hasOriginRules && !hasIpRules) return;
-
-    const originOk = hasOriginRules && isAllowedOrigin(request.headers.origin);
-    const ipOk = hasIpRules && isAllowedIp(request.ip);
-
-    // Request must satisfy at least one configured restriction.
-    if (!originOk && !ipOk) {
-      return reply.code(403).send({ error: 'Forbidden' });
+    const allowed = restrictionsDisabled || isAllowedOrigin(origin);
+    if (allowed) {
+      response.setHeader('Access-Control-Allow-Origin', origin);
     }
+    response.setHeader('Vary', 'Origin');
+    response.setHeader(
+      'Access-Control-Allow-Methods',
+      'GET,POST,PUT,DELETE,OPTIONS'
+    );
+    response.setHeader(
+      'Access-Control-Allow-Headers',
+      'authorization,content-type'
+    );
+    if (request.method === 'OPTIONS') {
+      return response.status(204).end();
+    }
+    return next();
   });
 
-  // Auth hook (skip health endpoint)
-  fastify.addHook('onRequest', async (request, reply) => {
-    if (request.url === '/api/health') return;
-
-    const auth = request.headers.authorization;
-    if (!auth || !auth.toLowerCase().startsWith('bearer ')) {
-      return reply.code(401).send({ error: 'Unauthorized' });
-    }
-
-    const token = auth.slice(7).trim();
-    if (!Config.API_TOKEN.includes(token)) {
-      return reply.code(401).send({ error: 'Unauthorized' });
-    }
-  });
+  app.use(restrictionsMiddleware);
+  app.use(authMiddleware);
 
   // Routes
-  fastify.register(healthRoute);
-  fastify.register(worldsRoute);
-  fastify.register(worldsMutationsRoute);
-  fastify.register(tagsRoute);
-  fastify.register(metaRoute);
+  app.use(healthRoute);
+  app.use(worldsRoute);
+  app.use(worldsMutationsRoute);
+  app.use(tagsRoute);
+  app.use(metaRoute);
 
-  return fastify;
+  app.use(notFoundHandler);
+  app.use(errorHandler);
+
+  return app;
 }

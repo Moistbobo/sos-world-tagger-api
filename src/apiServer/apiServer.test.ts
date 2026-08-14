@@ -1,4 +1,5 @@
-import { FastifyInstance } from 'fastify';
+import { Express } from 'express';
+import request from 'supertest';
 
 jest.mock('../config', () => ({
   __esModule: true,
@@ -92,14 +93,13 @@ function createMockRepo(overrides: Record<string, unknown> = {}) {
 }
 
 describe('API Server', () => {
-  let app: FastifyInstance;
+  let app: Express;
 
   beforeEach(() => {
     app = createApiServer();
   });
 
-  afterEach(async () => {
-    await app.close();
+  afterEach(() => {
     jest.clearAllMocks();
   });
 
@@ -107,14 +107,10 @@ describe('API Server', () => {
     it('returns health status without auth', async () => {
       asMock(getWorldRepository).mockReturnValue(createMockRepo());
 
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/health'
-      });
+      const response = await request(app).get('/api/health');
 
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body).toEqual({
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
         status: 'ok',
         worldCount: 1428,
         dbVersion: 1
@@ -124,36 +120,29 @@ describe('API Server', () => {
 
   describe('Auth', () => {
     it('returns 401 when auth header is missing', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/worlds'
-      });
+      const response = await request(app).get('/api/worlds');
 
-      expect(response.statusCode).toBe(401);
-      expect(JSON.parse(response.body)).toEqual({ error: 'Unauthorized' });
+      expect(response.status).toBe(401);
+      expect(response.body).toEqual({ error: 'Unauthorized' });
     });
 
     it('returns 401 when token is invalid', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/worlds',
-        headers: { authorization: 'Bearer wrong-token' }
-      });
+      const response = await request(app)
+        .get('/api/worlds')
+        .set('authorization', 'Bearer wrong-token');
 
-      expect(response.statusCode).toBe(401);
-      expect(JSON.parse(response.body)).toEqual({ error: 'Unauthorized' });
+      expect(response.status).toBe(401);
+      expect(response.body).toEqual({ error: 'Unauthorized' });
     });
 
     it('allows access with a valid token', async () => {
       asMock(getWorldRepository).mockReturnValue(createMockRepo());
 
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/worlds',
-        headers: { authorization: 'Bearer test-token' }
-      });
+      const response = await request(app)
+        .get('/api/worlds')
+        .set('authorization', 'Bearer test-token');
 
-      expect(response.statusCode).toBe(200);
+      expect(response.status).toBe(200);
     });
   });
 
@@ -161,14 +150,12 @@ describe('API Server', () => {
     it('returns paginated world list with sanitized fields', async () => {
       asMock(getWorldRepository).mockReturnValue(createMockRepo());
 
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/worlds',
-        headers: { authorization: 'Bearer test-token' }
-      });
+      const response = await request(app)
+        .get('/api/worlds')
+        .set('authorization', 'Bearer test-token');
 
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
+      expect(response.status).toBe(200);
+      const body = response.body;
       expect(body.total).toBe(1);
       expect(body.limit).toBe(50);
       expect(body.offset).toBe(0);
@@ -194,11 +181,9 @@ describe('API Server', () => {
         createMockRepo({ getAllPaginated })
       );
 
-      await app.inject({
-        method: 'GET',
-        url: '/api/worlds?tag=horror&tag=game',
-        headers: { authorization: 'Bearer test-token' }
-      });
+      await request(app)
+        .get('/api/worlds?tag=horror&tag=game')
+        .set('authorization', 'Bearer test-token');
 
       expect(getAllPaginated).toHaveBeenCalledWith(
         50,
@@ -213,37 +198,31 @@ describe('API Server', () => {
         createMockRepo({ getAllPaginated })
       );
 
-      await app.inject({
-        method: 'GET',
-        url: '/api/worlds?limit=9999',
-        headers: { authorization: 'Bearer test-token' }
-      });
+      await request(app)
+        .get('/api/worlds?limit=9999')
+        .set('authorization', 'Bearer test-token');
 
       expect(getAllPaginated).toHaveBeenCalledWith(500, 0, undefined);
     });
 
     it('returns 400 when minCapacity is greater than maxCapacity', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/worlds?minCapacity=50&maxCapacity=20',
-        headers: { authorization: 'Bearer test-token' }
-      });
+      const response = await request(app)
+        .get('/api/worlds?minCapacity=50&maxCapacity=20')
+        .set('authorization', 'Bearer test-token');
 
-      expect(response.statusCode).toBe(400);
-      expect(JSON.parse(response.body)).toEqual({
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
         error: 'minCapacity must be less than or equal to maxCapacity'
       });
     });
 
     it('returns 400 for non-integer capacity values', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/worlds?minCapacity=abc',
-        headers: { authorization: 'Bearer test-token' }
-      });
+      const response = await request(app)
+        .get('/api/worlds?minCapacity=abc')
+        .set('authorization', 'Bearer test-token');
 
-      expect(response.statusCode).toBe(400);
-      expect(JSON.parse(response.body)).toEqual({
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
         error: 'minCapacity must be an integer'
       });
     });
@@ -254,11 +233,9 @@ describe('API Server', () => {
         createMockRepo({ getAllPaginated })
       );
 
-      await app.inject({
-        method: 'GET',
-        url: '/api/worlds?dayRange=7',
-        headers: { authorization: 'Bearer test-token' }
-      });
+      await request(app)
+        .get('/api/worlds?dayRange=7')
+        .set('authorization', 'Bearer test-token');
 
       expect(getAllPaginated).toHaveBeenCalledWith(
         50,
@@ -272,14 +249,12 @@ describe('API Server', () => {
     it('returns a single world with vrchatUrl and quality', async () => {
       asMock(getWorldRepository).mockReturnValue(createMockRepo());
 
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/worlds/wrld_abc123',
-        headers: { authorization: 'Bearer test-token' }
-      });
+      const response = await request(app)
+        .get('/api/worlds/wrld_abc123')
+        .set('authorization', 'Bearer test-token');
 
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
+      expect(response.status).toBe(200);
+      const body = response.body;
       expect(body.worldId).toBe('wrld_abc123');
       expect(body.vrchatUrl).toBe('https://vrchat.com/home/world/wrld_abc123');
       expect(body.quality).toBe('good');
@@ -294,14 +269,12 @@ describe('API Server', () => {
         createMockRepo({ getByWorldId: jest.fn(() => []) })
       );
 
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/worlds/wrld_missing',
-        headers: { authorization: 'Bearer test-token' }
-      });
+      const response = await request(app)
+        .get('/api/worlds/wrld_missing')
+        .set('authorization', 'Bearer test-token');
 
-      expect(response.statusCode).toBe(404);
-      expect(JSON.parse(response.body)).toEqual({
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
         error: 'World not found'
       });
     });
@@ -311,15 +284,12 @@ describe('API Server', () => {
     it('returns unique tags with counts', async () => {
       asMock(getWorldRepository).mockReturnValue(createMockRepo());
 
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/tags',
-        headers: { authorization: 'Bearer test-token' }
-      });
+      const response = await request(app)
+        .get('/api/tags')
+        .set('authorization', 'Bearer test-token');
 
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body.tags).toEqual([
+      expect(response.status).toBe(200);
+      expect(response.body.tags).toEqual([
         { tag: 'horror', count: 312 },
         { tag: 'game', count: 145 }
       ]);
@@ -330,15 +300,12 @@ describe('API Server', () => {
     it('returns quality and platform metadata counts', async () => {
       asMock(getWorldRepository).mockReturnValue(createMockRepo());
 
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/meta',
-        headers: { authorization: 'Bearer test-token' }
-      });
+      const response = await request(app)
+        .get('/api/meta')
+        .set('authorization', 'Bearer test-token');
 
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body).toEqual({
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
         qualityGood: 123,
         qualityBad: 12,
         platformDesktop: 80,
@@ -350,14 +317,12 @@ describe('API Server', () => {
 
   describe('Error handling', () => {
     it('returns clean JSON 404 for unmatched routes', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/not-a-route',
-        headers: { authorization: 'Bearer test-token' }
-      });
+      const response = await request(app)
+        .get('/api/not-a-route')
+        .set('authorization', 'Bearer test-token');
 
-      expect(response.statusCode).toBe(404);
-      expect(JSON.parse(response.body)).toEqual({ error: 'Not Found' });
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({ error: 'Not Found' });
     });
 
     it('sanitizes 500 errors from route handlers', async () => {
@@ -369,16 +334,13 @@ describe('API Server', () => {
         })
       );
 
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/worlds',
-        headers: { authorization: 'Bearer test-token' }
-      });
+      const response = await request(app)
+        .get('/api/worlds')
+        .set('authorization', 'Bearer test-token');
 
-      expect(response.statusCode).toBe(500);
-      const body = JSON.parse(response.body);
-      expect(body.error).toBe('Internal Server Error');
-      expect(body).not.toHaveProperty('stack');
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBe('Internal Server Error');
+      expect(response.body).not.toHaveProperty('stack');
     });
   });
 });
