@@ -6,6 +6,8 @@ import tagsRoute from './routes/tags';
 import metaRoute from './routes/meta';
 import worldsMutationsRoute from './routes/worldsMutations';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { authMiddleware } from './middleware/auth';
+import { accessLogMiddleware } from './middleware/accessLog';
 
 function normalizeOrigin(origin: string): string {
   return origin.trim().replace(/\/$/, '').toLowerCase();
@@ -72,26 +74,6 @@ function restrictionsMiddleware(
   return next();
 }
 
-// Bearer token auth (skip health endpoint)
-function authMiddleware(
-  request: Request,
-  response: Response,
-  next: NextFunction
-) {
-  if (request.path === '/api/health') return next();
-
-  const auth = request.headers.authorization;
-  if (!auth || !auth.toLowerCase().startsWith('bearer ')) {
-    return response.status(401).send({ error: 'Unauthorized' });
-  }
-
-  const token = auth.slice(7).trim();
-  if (!Config.API_TOKEN.includes(token)) {
-    return response.status(401).send({ error: 'Unauthorized' });
-  }
-  return next();
-}
-
 export function createApiServer(): Express {
   const app = express();
   app.use(express.json());
@@ -129,6 +111,7 @@ export function createApiServer(): Express {
   });
 
   app.use(restrictionsMiddleware);
+  app.use(accessLogMiddleware);
   app.use(authMiddleware);
 
   // Routes

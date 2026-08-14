@@ -2,7 +2,7 @@ name: Deploy to Production
 
 on:
   push:
-    branches: [release]
+    branches: [production]
   workflow_dispatch:
 
 jobs:

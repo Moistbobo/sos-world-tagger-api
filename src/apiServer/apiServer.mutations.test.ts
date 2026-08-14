@@ -6,7 +6,6 @@ jest.mock('../config', () => ({
   default: {
     API_PORT: 3000,
     API_HOST: '0.0.0.0',
-    API_TOKEN: ['test-token'],
     API_ALLOWED_ORIGINS: [],
     API_ALLOWED_IPS: [],
     DISABLE_API_RESTRICTIONS: false
@@ -15,6 +14,12 @@ jest.mock('../config', () => ({
 
 jest.mock('../db/worldRepository', () => ({
   getWorldRepository: jest.fn()
+}));
+
+jest.mock('../db/tokenRepository', () => ({
+  __esModule: true,
+  getTokenRepository: jest.fn(),
+  hashToken: jest.fn((token: string) => token)
 }));
 
 jest.mock('../logger', () => ({
@@ -47,6 +52,7 @@ jest.mock('../vrchat/client', () => ({
 }));
 
 import { getWorldRepository } from '../db/worldRepository';
+import { getTokenRepository } from '../db/tokenRepository';
 import { addWorld } from '../worlds/service';
 import { createApiServer } from './index';
 
@@ -66,7 +72,31 @@ const VALID_BODY = {
 describe('API mutations', () => {
   let app: Express;
 
+  function mockTokenRepo(
+    permissions: string[] = [
+      'worlds:read',
+      'tags:read',
+      'meta:read',
+      'worlds:write'
+    ]
+  ) {
+    asMock(getTokenRepository).mockReturnValue({
+      findByHash: jest.fn(() => ({
+        id: 1,
+        tokenHash: 'test-token',
+        name: 'test-token',
+        roleId: 1,
+        role: { id: 1, name: 'admin', permissions, createdAt: 0 },
+        createdAt: 0,
+        lastUsedAt: null,
+        revokedAt: null
+      })),
+      touchLastUsed: jest.fn()
+    });
+  }
+
   beforeEach(() => {
+    mockTokenRepo();
     app = createApiServer();
   });
 
@@ -79,6 +109,18 @@ describe('API mutations', () => {
       const response = await request(app).post('/api/worlds').send(VALID_BODY);
 
       expect(response.status).toBe(401);
+    });
+
+    it('returns 403 when the token lacks worlds:write', async () => {
+      mockTokenRepo(['worlds:read']);
+
+      const response = await request(app)
+        .post('/api/worlds')
+        .set(AUTH)
+        .send(VALID_BODY);
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({ error: 'Forbidden' });
     });
 
     it('returns 400 on invalid body', async () => {
