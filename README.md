@@ -2,7 +2,7 @@
 
 Standalone REST API for the VRChat world tagging system. This is the API
 refactor of the `bot_vrc_world_tagger` project: the bot hosts the Discord bot,
-this project hosts the Fastify API that reads and writes the shared SQLite
+this project hosts the Express API that reads and writes the shared SQLite
 world database.
 
 The API keeps the existing read endpoints (`/api/worlds`, `/api/tags`,

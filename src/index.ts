@@ -3,9 +3,13 @@ import logger from './logger';
 import { createApiServer } from './apiServer';
 
 async function main() {
-  const fastify = createApiServer();
+  const app = createApiServer();
   try {
-    await fastify.listen({ port: Config.API_PORT, host: Config.API_HOST });
+    await new Promise<void>((resolve, reject) => {
+      const server = app.listen(Config.API_PORT, Config.API_HOST);
+      server.once('listening', resolve);
+      server.once('error', reject);
+    });
     logger.info(
       `API server listening on http://${Config.API_HOST}:${Config.API_PORT}`
     );

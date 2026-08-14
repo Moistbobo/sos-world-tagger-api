@@ -23,7 +23,12 @@ export default defineConfig([
   },
   {
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off'
+      '@typescript-eslint/no-explicit-any': 'off',
+      // Express error handlers keep an unused `next` param to signal arity 4
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
+      ]
     }
   },
   {

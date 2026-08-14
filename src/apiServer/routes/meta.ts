@@ -1,11 +1,11 @@
-import { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { Router } from 'express';
 import { getWorldRepository } from '../../db/worldRepository';
 
-const metaRoute: FastifyPluginAsync = async (fastify: FastifyInstance) => {
-  // GET /api/meta
-  fastify.get('/api/meta', async () => {
-    return getWorldRepository().getMetadataCounts();
-  });
-};
+const router = Router();
 
-export default metaRoute;
+// GET /api/meta
+router.get('/api/meta', (_request, response) => {
+  response.send(getWorldRepository().getMetadataCounts());
+});
+
+export default router;
