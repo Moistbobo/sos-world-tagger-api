@@ -1,8 +1,17 @@
 import Config from './config';
 import logger from './logger';
 import { createApiServer } from './apiServer';
+import { ensureAuthenticated } from './vrchat/client';
 
 async function main() {
+  try {
+    const currentUser = await ensureAuthenticated();
+    logger.info(`Authenticated with VRChat as ${currentUser.displayName}`);
+  } catch (error) {
+    logger.error('Failed to authenticate with VRChat:', error);
+    process.exit(1);
+  }
+
   const app = createApiServer();
   try {
     await new Promise<void>((resolve, reject) => {

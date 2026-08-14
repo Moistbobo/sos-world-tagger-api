@@ -5,7 +5,8 @@ jest.mock('../db/worldRepository', () => ({
 }));
 
 jest.mock('../vrchat/client', () => ({
-  fetchWorldData: jest.fn()
+  fetchWorldData: jest.fn(),
+  ensureAuthenticated: jest.fn()
 }));
 
 jest.mock('../tags/extractor', () => ({

@@ -48,6 +48,7 @@ jest.mock('../worlds/service', () => ({
 jest.mock('../vrchat/client', () => ({
   fetchWorldData: jest.fn(),
   isCurrentUser: jest.fn(),
+  ensureAuthenticated: jest.fn(),
   vrchat: { client: {} }
 }));
 

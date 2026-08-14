@@ -14,7 +14,8 @@ export const vrchat = new VRChat({
       username: Config.VRC_USERNAME,
       password: Config.VRC_PASSWORD,
       totpSecret: Config.VRC_TOTP_KEY
-    }
+    },
+    optimistic: false
   },
   keyv: new KeyvFile({ filename: './data.json' })
 });
@@ -27,6 +28,34 @@ export function isCurrentUser(
   data: CurrentUser | RequiresTwoFactorAuth
 ): data is CurrentUser {
   return 'displayName' in data;
+}
+
+/**
+ * Authenticates with the VRChat API and returns the current user.
+ * Throws if credentials are missing or the login fails.
+ */
+export async function ensureAuthenticated(): Promise<CurrentUser> {
+  if (!Config.VRC_USERNAME || !Config.VRC_PASSWORD) {
+    throw new Error(
+      'VRChat credentials are not configured (VRC_USERNAME, VRC_PASSWORD)'
+    );
+  }
+
+  const result = await vrchat.login({
+    username: Config.VRC_USERNAME,
+    password: Config.VRC_PASSWORD,
+    totpSecret: Config.VRC_TOTP_KEY
+  });
+
+  if (result.error) {
+    throw new Error(`VRChat authentication failed: ${result.error.message}`);
+  }
+  if (!isCurrentUser(result.data)) {
+    throw new Error(
+      'VRChat authentication failed: two-factor authentication could not be completed'
+    );
+  }
+  return result.data;
 }
 
 /**
