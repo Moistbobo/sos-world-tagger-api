@@ -9,11 +9,6 @@ const Config = {
   DATABASE_PATH: process.env.DATABASE_PATH || './worlds.db',
   API_PORT: Number(process.env.API_PORT) || 3000,
   API_HOST: process.env.API_HOST || '0.0.0.0',
-  API_TOKEN: process.env.API_TOKEN
-    ? process.env.API_TOKEN.split(',')
-    : process.env.EXPORT_API_TOKEN
-      ? [process.env.EXPORT_API_TOKEN]
-      : [],
   API_ALLOWED_ORIGINS: process.env.API_ALLOWED_ORIGINS
     ? process.env.API_ALLOWED_ORIGINS.split(',').map((o) => o.trim())
     : [],

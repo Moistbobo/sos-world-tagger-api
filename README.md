@@ -34,11 +34,14 @@ Fill in `.env` with:
 |----------|-------------|
 | `VRC_USERNAME` / `VRC_PASSWORD` / `VRC_TOTP_KEY` | VRChat credentials used to fetch world data on add |
 | `API_PORT` / `API_HOST` | Bind address, defaults `3000` / `0.0.0.0` |
-| `API_TOKEN` | Comma-separated Bearer tokens for all `/api/*` endpoints (except `/api/health`). Falls back to `EXPORT_API_TOKEN`. |
 | `API_ALLOWED_ORIGINS` | Comma-separated allowed `Origin` values. Leave empty to allow any. |
 | `API_ALLOWED_IPS` | Comma-separated allowed source IPs. Leave empty to skip. |
 | `DISABLE_API_RESTRICTIONS` | Set `true` to bypass origin/IP allowlists (dev only). |
 | `DATABASE_PATH` | SQLite database path, defaults `./worlds.db`. Point this at the bot's database to share data. |
+
+API tokens are stored in the database and carry a role. Provision them with
+`pnpm token:create -- --name <name> --role <role>` (roles: `viewer`, `curator`,
+`admin`). See [docs/API.md](docs/API.md) for the full reference.
 
 ## Running
 
@@ -75,5 +78,5 @@ Mutation endpoints:
 
 ## Future work
 
-- RBAC: separate read-only tokens (`API_TOKEN`) from write tokens
-  (`MUTATION_API_TOKEN`) so dashboards cannot mutate the database.
+- Allow `admin` tokens to generate access tokens over the API (new
+  `tokens:create` permission and `POST /api/tokens` endpoint).

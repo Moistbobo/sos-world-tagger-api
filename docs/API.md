@@ -28,14 +28,63 @@ All endpoints **except** `GET /api/health` require a valid Bearer token:
 Authorization: Bearer <your-api-token>
 ```
 
-The token is configured via the `API_TOKEN` environment variable (supports
-multiple comma-separated tokens) and falls back to `EXPORT_API_TOKEN`.
+Tokens are stored in the SQLite database and map to a role that carries a set
+of permissions.
 
-If the header is missing, malformed, or the token does not match, the server
-responds with `401 Unauthorized`.
+If the header is missing, malformed, or the token is unknown or revoked, the
+server responds with `401 Unauthorized`. If the token is valid but its role
+lacks the permission required by the endpoint, the server responds with
+`403 Forbidden`.
 
-Note: reads and mutations currently share the same token. Separate read/write
-tokens (RBAC) are planned future work.
+### Provisioning tokens
+
+Tokens are created, listed, and revoked with the CLI. The raw token is printed
+once at creation and cannot be recovered later, so save it immediately.
+
+```bash
+# Create a token with a role
+pnpm token:create -- --name bot --role curator
+
+# List tokens (name, role, created, last used, revoked status)
+pnpm token:list
+
+# Revoke a token
+pnpm token:revoke -- --name bot
+```
+
+### Roles
+
+Roles own permissions. Changing a role applies immediately to every token
+holding it, without re-provisioning tokens.
+
+| Role | Permissions |
+|------|-------------|
+| `viewer` | `worlds:read`, `tags:read`, `meta:read` |
+| `curator` | viewer permissions plus `worlds:write` |
+| `admin` | same as curator today; token generation is planned future work |
+
+The seed roles are created automatically by the database migration. Custom
+roles can be defined:
+
+```bash
+# List roles and their permissions
+pnpm role:list
+
+# Create a custom role
+pnpm role:create -- --name curator-v2 --perms worlds:read,tags:read,worlds:write
+
+# Add or remove permissions on a role
+pnpm role:update -- --name curator-v2 --add meta:read --remove tags:read
+```
+
+### Permissions
+
+| Permission | Routes |
+|------------|--------|
+| `worlds:read` | `GET /api/worlds`, `GET /api/worlds/pairs`, `GET /api/worlds/:worldId` |
+| `worlds:write` | `POST /api/worlds`, `DELETE /api/worlds/:worldId`, `PUT /api/worlds/:worldId/quality`, `PUT /api/worlds/:worldId/tags` |
+| `tags:read` | `GET /api/tags` |
+| `meta:read` | `GET /api/meta` |
 
 ---
 
@@ -410,8 +459,8 @@ Internal fields such as `guildId`, `messageId`, `sourceContent`, and
 | Status Code | Meaning                  | Body |
 |-------------|--------------------------|------|
 | `400`       | Invalid query params / body | `{ "error": "..." }` |
-| `401`       | Missing / invalid token  | `{ "error": "Unauthorized" }` |
-| `403`       | Disallowed origin or IP  | `{ "error": "Forbidden" }` |
+| `401`       | Missing / invalid / revoked token | `{ "error": "Unauthorized" }` |
+| `403`       | Disallowed origin or IP, or token lacks the required permission | `{ "error": "Forbidden" }` |
 | `404`       | World not found / route  | `{ "error": "World not found" }` / `{ "error": "Not Found" }` |
 | `502`       | VRChat fetch failure     | `{ "error": "Failed to fetch world data from VRChat" }` |
 
