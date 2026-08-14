@@ -32,7 +32,7 @@ const worldsMutationsRoute: FastifyPluginAsync = async (
       }
       return reply.code(201).send({
         duplicate: false,
-        world: sanitizeRecord(result.world)
+        world: result.world
       });
     } catch (error) {
       if (error instanceof WorldServiceError) {
@@ -72,15 +72,14 @@ const worldsMutationsRoute: FastifyPluginAsync = async (
         .send({ error: 'Invalid body. Expected { guildId, quality }' });
     }
 
-    const updated = getWorldRepository().updateQuality(
-      worldId,
-      body.guildId,
-      body.quality
-    );
-    if (!updated) {
+    const repo = getWorldRepository();
+    const exists = repo.getByWorldAndGuild(worldId, body.guildId);
+    if (!exists) {
       return reply.code(404).send({ error: 'World not found' });
     }
-    return { updated: true };
+
+    const updated = repo.updateQuality(worldId, body.guildId, body.quality);
+    return { updated };
   });
 
   // PUT /api/worlds/:worldId/tags
@@ -93,16 +92,19 @@ const worldsMutationsRoute: FastifyPluginAsync = async (
       });
     }
 
-    const updated = getWorldRepository().updateTags(
+    const repo = getWorldRepository();
+    const exists = repo.getByWorldAndGuild(worldId, body.guildId);
+    if (!exists) {
+      return reply.code(404).send({ error: 'World not found' });
+    }
+
+    const updated = repo.updateTags(
       worldId,
       body.guildId,
       body.tags,
       body.sourceContent
     );
-    if (!updated) {
-      return reply.code(404).send({ error: 'World not found' });
-    }
-    return { updated: true };
+    return { updated };
   });
 };
 

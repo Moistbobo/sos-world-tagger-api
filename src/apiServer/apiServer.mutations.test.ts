@@ -108,25 +108,25 @@ describe('API mutations', () => {
       expect(response.statusCode).toBe(400);
     });
 
-    it('returns 201 created with sanitized world when new', async () => {
+    it('returns 201 with full record (including guildId/messageId/vrchatData) when new', async () => {
       asMock(addWorld).mockResolvedValue({
         status: 'created',
         world: {
           worldId: VALID_BODY.worldId,
+          guildId: VALID_BODY.guildId,
+          messageId: VALID_BODY.messageId,
           name: 'Midnight Bar',
           authorName: 'VRChat',
           capacity: 40,
           platforms: ['standalonewindows'],
           tags: ['horror', 'game'],
           imageUrl: 'https://example.com/img.png',
-          sourceContent: null,
-          vrchatData: null,
+          sourceContent: 'original message',
+          vrchatData: '{"id":"wrld_x"}',
           quality: null,
           createdAt: 1717257600,
           updatedAt: 1717257600,
-          guildId: VALID_BODY.guildId,
-          messageId: VALID_BODY.messageId,
-          internalAddDate: null
+          internalAddDate: 1717257600
         }
       });
 
@@ -142,9 +142,10 @@ describe('API mutations', () => {
       expect(body.duplicate).toBe(false);
       expect(body.world.worldId).toBe(VALID_BODY.worldId);
       expect(body.world.name).toBe('Midnight Bar');
-      expect(body.world.guildId).toBeUndefined();
-      expect(body.world.messageId).toBeUndefined();
-      expect(body.world.vrchatData).toBeUndefined();
+      expect(body.world.guildId).toBe(VALID_BODY.guildId);
+      expect(body.world.messageId).toBe(VALID_BODY.messageId);
+      expect(body.world.vrchatData).toBe('{"id":"wrld_x"}');
+      expect(body.world.tags).toEqual(['horror', 'game']);
     });
 
     it('returns 200 duplicate with existingMessageId when world exists', async () => {
@@ -250,9 +251,12 @@ describe('API mutations', () => {
   });
 
   describe('PUT /api/worlds/:worldId/quality', () => {
-    it('updates quality and returns 200', async () => {
+    it('updates quality and returns 200 with updated: true', async () => {
       asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ updateQuality: jest.fn(() => true) })
+        createMockRepo({
+          getByWorldAndGuild: jest.fn(() => ({})),
+          updateQuality: jest.fn(() => true)
+        })
       );
 
       const response = await app.inject({
@@ -264,6 +268,25 @@ describe('API mutations', () => {
 
       expect(response.statusCode).toBe(200);
       expect(JSON.parse(response.body)).toEqual({ updated: true });
+    });
+
+    it('returns 200 with updated: false when quality is unchanged', async () => {
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({
+          getByWorldAndGuild: jest.fn(() => ({})),
+          updateQuality: jest.fn(() => false)
+        })
+      );
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: `/api/worlds/${VALID_BODY.worldId}/quality`,
+        headers: AUTH,
+        payload: { guildId: 'guild-1', quality: 'bad' }
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(JSON.parse(response.body)).toEqual({ updated: false });
     });
 
     it('returns 400 on invalid quality value', async () => {
@@ -279,7 +302,7 @@ describe('API mutations', () => {
 
     it('returns 404 when world does not exist', async () => {
       asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ updateQuality: jest.fn(() => false) })
+        createMockRepo({ getByWorldAndGuild: jest.fn(() => undefined) })
       );
 
       const response = await app.inject({
@@ -294,9 +317,12 @@ describe('API mutations', () => {
   });
 
   describe('PUT /api/worlds/:worldId/tags', () => {
-    it('updates tags and returns 200', async () => {
+    it('updates tags and returns 200 with updated: true', async () => {
       asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ updateTags: jest.fn(() => true) })
+        createMockRepo({
+          getByWorldAndGuild: jest.fn(() => ({})),
+          updateTags: jest.fn(() => true)
+        })
       );
 
       const response = await app.inject({
@@ -327,7 +353,7 @@ describe('API mutations', () => {
 
     it('returns 404 when world does not exist', async () => {
       asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ updateTags: jest.fn(() => false) })
+        createMockRepo({ getByWorldAndGuild: jest.fn(() => undefined) })
       );
 
       const response = await app.inject({
@@ -358,6 +384,7 @@ describe('API mutations', () => {
         platformAndroid: 0,
         platformiOS: 0
       })),
+      getAllWorldGuildPairs: jest.fn(() => new Set()),
       ...overrides
     };
   }

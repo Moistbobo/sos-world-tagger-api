@@ -57,7 +57,9 @@ function buildWorldRecord(
     tags: extractTags(content),
     imageUrl: worldData.imageUrl,
     sourceContent: content,
-    vrchatData: JSON.stringify(worldData),
+    vrchatData: JSON.stringify(worldData, (_, v) =>
+      typeof v === 'bigint' ? v.toString() : v
+    ),
     internalAddDate:
       messageTimestamp ?? getDiscordMessageTimestampSeconds(messageId)
   };
@@ -70,6 +72,13 @@ export async function addWorld(req: AddWorldRequest): Promise<AddWorldResult> {
   if (checkDuplicate) {
     const existing = repo.getByWorldAndGuild(req.worldId, req.guildId);
     if (existing) {
+      if (req.messageTimestamp !== undefined) {
+        repo.backfillInternalAddDate(
+          req.worldId,
+          req.guildId,
+          req.messageTimestamp
+        );
+      }
       return {
         status: 'duplicate',
         world: existing,

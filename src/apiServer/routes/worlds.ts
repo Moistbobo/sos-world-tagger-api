@@ -94,6 +94,19 @@ const worldsRoute: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     };
   });
 
+  // GET /api/worlds/pairs — internal helper for the bot's crawl cache
+  fastify.get('/api/worlds/pairs', async () => {
+    const pairs = getWorldRepository().getAllWorldGuildPairs();
+    const entries = Array.from(pairs).map((key) => {
+      const dashIndex = key.lastIndexOf('-');
+      return {
+        worldId: key.slice(0, dashIndex),
+        guildId: key.slice(dashIndex + 1)
+      };
+    });
+    return { pairs: entries };
+  });
+
   // GET /api/worlds/:worldId
   fastify.get('/api/worlds/:worldId', async (request, reply) => {
     const { worldId } = request.params as { worldId: string };

@@ -14,12 +14,14 @@ export interface DeleteWorldBody {
 export interface UpdateQualityBody {
   guildId: string;
   quality: 'good' | 'bad';
+  messageTimestamp?: number;
 }
 
 export interface UpdateTagsBody {
   guildId: string;
   tags: string[];
   sourceContent: string | null;
+  messageTimestamp?: number;
 }
 
 const WORLD_ID_REGEX = /^wrld_[a-f0-9-]{36}$/;
@@ -83,7 +85,18 @@ export function parseUpdateQualityBody(
   if (!isObject(body)) return null;
   if (!isNonEmptyString(body.guildId)) return null;
   if (body.quality !== 'good' && body.quality !== 'bad') return null;
-  return { guildId: body.guildId, quality: body.quality };
+  const messageTimestamp = body.messageTimestamp;
+  if (
+    messageTimestamp !== undefined &&
+    (typeof messageTimestamp !== 'number' || !Number.isFinite(messageTimestamp))
+  ) {
+    return null;
+  }
+  return {
+    guildId: body.guildId,
+    quality: body.quality,
+    messageTimestamp: messageTimestamp as number | undefined
+  };
 }
 
 export function parseUpdateTagsBody(body: unknown): UpdateTagsBody | null {
@@ -93,9 +106,17 @@ export function parseUpdateTagsBody(body: unknown): UpdateTagsBody | null {
   if (!body.tags.every((t) => typeof t === 'string')) return null;
   const sourceContent = body.sourceContent;
   if (sourceContent !== null && typeof sourceContent !== 'string') return null;
+  const messageTimestamp = body.messageTimestamp;
+  if (
+    messageTimestamp !== undefined &&
+    (typeof messageTimestamp !== 'number' || !Number.isFinite(messageTimestamp))
+  ) {
+    return null;
+  }
   return {
     guildId: body.guildId,
     tags: body.tags,
-    sourceContent: sourceContent as string | null
+    sourceContent: sourceContent as string | null,
+    messageTimestamp: messageTimestamp as number | undefined
   };
 }
