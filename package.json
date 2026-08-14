@@ -9,7 +9,14 @@
     "format": "prettier --write .",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
-    "prepare": "husky"
+    "prepare": "husky",
+    "token-cli": "jiti src/tokens/cli.ts",
+    "token:create": "jiti src/tokens/cli.ts token:create",
+    "token:list": "jiti src/tokens/cli.ts token:list",
+    "token:revoke": "jiti src/tokens/cli.ts token:revoke",
+    "role:list": "jiti src/tokens/cli.ts role:list",
+    "role:create": "jiti src/tokens/cli.ts role:create",
+    "role:update": "jiti src/tokens/cli.ts role:update"
   },
   "license": "ISC",
   "devDependencies": {

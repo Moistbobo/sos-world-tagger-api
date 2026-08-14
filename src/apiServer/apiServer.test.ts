@@ -6,7 +6,6 @@ jest.mock('../config', () => ({
   default: {
     API_PORT: 3000,
     API_HOST: '0.0.0.0',
-    API_TOKEN: ['test-token'],
     API_ALLOWED_ORIGINS: [],
     API_ALLOWED_IPS: [],
     DISABLE_API_RESTRICTIONS: false
@@ -15,6 +14,12 @@ jest.mock('../config', () => ({
 
 jest.mock('../db/worldRepository', () => ({
   getWorldRepository: jest.fn()
+}));
+
+jest.mock('../db/tokenRepository', () => ({
+  __esModule: true,
+  getTokenRepository: jest.fn(),
+  hashToken: jest.fn((token: string) => token)
 }));
 
 jest.mock('../logger', () => ({
@@ -34,6 +39,7 @@ jest.mock('../vrchat/client', () => ({
 }));
 
 import { getWorldRepository } from '../db/worldRepository';
+import { getTokenRepository } from '../db/tokenRepository';
 import { createApiServer } from './index';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
@@ -92,10 +98,34 @@ function createMockRepo(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function createMockTokenRepo(
+  permissions: string[] = [
+    'worlds:read',
+    'tags:read',
+    'meta:read',
+    'worlds:write'
+  ]
+) {
+  return {
+    findByHash: jest.fn(() => ({
+      id: 1,
+      tokenHash: 'test-token',
+      name: 'test-token',
+      roleId: 1,
+      role: { id: 1, name: 'admin', permissions, createdAt: 0 },
+      createdAt: 0,
+      lastUsedAt: null,
+      revokedAt: null
+    })),
+    touchLastUsed: jest.fn()
+  };
+}
+
 describe('API Server', () => {
   let app: Express;
 
   beforeEach(() => {
+    asMock(getTokenRepository).mockReturnValue(createMockTokenRepo());
     app = createApiServer();
   });
 
@@ -127,12 +157,70 @@ describe('API Server', () => {
     });
 
     it('returns 401 when token is invalid', async () => {
+      asMock(getTokenRepository).mockReturnValue({
+        findByHash: jest.fn(() => undefined),
+        touchLastUsed: jest.fn()
+      });
+
       const response = await request(app)
         .get('/api/worlds')
         .set('authorization', 'Bearer wrong-token');
 
       expect(response.status).toBe(401);
       expect(response.body).toEqual({ error: 'Unauthorized' });
+    });
+
+    it('returns 401 when token is revoked', async () => {
+      asMock(getTokenRepository).mockReturnValue({
+        findByHash: jest.fn(() => ({
+          id: 1,
+          tokenHash: 'revoked-token',
+          name: 'revoked',
+          roleId: 1,
+          role: {
+            id: 1,
+            name: 'admin',
+            permissions: ['worlds:read'],
+            createdAt: 0
+          },
+          createdAt: 0,
+          lastUsedAt: null,
+          revokedAt: 123
+        })),
+        touchLastUsed: jest.fn()
+      });
+
+      const response = await request(app)
+        .get('/api/worlds')
+        .set('authorization', 'Bearer revoked-token');
+
+      expect(response.status).toBe(401);
+      expect(response.body).toEqual({ error: 'Unauthorized' });
+    });
+
+    it('returns 403 when the token lacks the required permission', async () => {
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['tags:read'])
+      );
+
+      const response = await request(app)
+        .get('/api/worlds')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({ error: 'Forbidden' });
+    });
+
+    it('touches last_used_at for a valid token', async () => {
+      asMock(getWorldRepository).mockReturnValue(createMockRepo());
+      const repo = createMockTokenRepo();
+      asMock(getTokenRepository).mockReturnValue(repo);
+
+      await request(app)
+        .get('/api/worlds')
+        .set('authorization', 'Bearer test-token');
+
+      expect(repo.touchLastUsed).toHaveBeenCalled();
     });
 
     it('allows access with a valid token', async () => {

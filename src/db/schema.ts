@@ -106,6 +106,45 @@ const MIGRATIONS: Migration[] = [
         );
       }
     }
+  },
+  {
+    name: '006_create_roles_and_api_tokens',
+    run: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS roles (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          name         TEXT    NOT NULL UNIQUE,
+          permissions  TEXT    NOT NULL,
+          created_at   INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS api_tokens (
+          id            INTEGER PRIMARY KEY AUTOINCREMENT,
+          token_hash    TEXT    NOT NULL UNIQUE,
+          name          TEXT    NOT NULL,
+          role_id       INTEGER NOT NULL REFERENCES roles(id),
+          created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+          last_used_at  INTEGER,
+          revoked_at    INTEGER
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_api_tokens_role_id ON api_tokens(role_id);
+      `);
+
+      const roleCount = (
+        db.prepare('SELECT COUNT(*) as count FROM roles').get() as {
+          count: number;
+        }
+      ).count;
+      if (roleCount > 0) return;
+
+      db.exec(`
+        INSERT INTO roles (name, permissions) VALUES
+          ('viewer',  '["worlds:read","tags:read","meta:read"]'),
+          ('curator', '["worlds:read","tags:read","meta:read","worlds:write"]'),
+          ('admin',   '["worlds:read","tags:read","meta:read","worlds:write"]');
+      `);
+    }
   }
 ];
 
