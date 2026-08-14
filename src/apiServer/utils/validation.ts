@@ -1,0 +1,101 @@
+export interface AddWorldBody {
+  worldId: string;
+  guildId: string;
+  messageId: string;
+  content: string;
+  messageTimestamp?: number;
+  checkDuplicate?: boolean;
+}
+
+export interface DeleteWorldBody {
+  guildId: string;
+}
+
+export interface UpdateQualityBody {
+  guildId: string;
+  quality: 'good' | 'bad';
+}
+
+export interface UpdateTagsBody {
+  guildId: string;
+  tags: string[];
+  sourceContent: string | null;
+}
+
+const WORLD_ID_REGEX = /^wrld_[a-f0-9-]{36}$/;
+const SNOWFLAKE_REGEX = /^\d{17,20}$/;
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function isValidWorldId(value: unknown): value is string {
+  return typeof value === 'string' && WORLD_ID_REGEX.test(value);
+}
+
+export function isValidSnowflake(value: unknown): value is string {
+  return typeof value === 'string' && SNOWFLAKE_REGEX.test(value);
+}
+
+export function parseAddWorldBody(body: unknown): AddWorldBody | null {
+  if (!isObject(body)) return null;
+  if (!isValidWorldId(body.worldId)) return null;
+  if (!isNonEmptyString(body.guildId)) return null;
+  if (!isValidSnowflake(body.messageId)) return null;
+  if (typeof body.content !== 'string') return null;
+
+  const messageTimestamp = body.messageTimestamp;
+  if (
+    messageTimestamp !== undefined &&
+    (typeof messageTimestamp !== 'number' || !Number.isFinite(messageTimestamp))
+  ) {
+    return null;
+  }
+
+  const checkDuplicate = body.checkDuplicate;
+  if (checkDuplicate !== undefined && typeof checkDuplicate !== 'boolean') {
+    return null;
+  }
+
+  return {
+    worldId: body.worldId,
+    guildId: body.guildId,
+    messageId: body.messageId,
+    content: body.content,
+    messageTimestamp: messageTimestamp as number | undefined,
+    checkDuplicate: checkDuplicate as boolean | undefined
+  };
+}
+
+export function parseGuildIdBody(body: unknown): DeleteWorldBody | null {
+  if (!isObject(body)) return null;
+  if (!isNonEmptyString(body.guildId)) return null;
+  return { guildId: body.guildId };
+}
+
+export function parseUpdateQualityBody(
+  body: unknown
+): UpdateQualityBody | null {
+  if (!isObject(body)) return null;
+  if (!isNonEmptyString(body.guildId)) return null;
+  if (body.quality !== 'good' && body.quality !== 'bad') return null;
+  return { guildId: body.guildId, quality: body.quality };
+}
+
+export function parseUpdateTagsBody(body: unknown): UpdateTagsBody | null {
+  if (!isObject(body)) return null;
+  if (!isNonEmptyString(body.guildId)) return null;
+  if (!Array.isArray(body.tags)) return null;
+  if (!body.tags.every((t) => typeof t === 'string')) return null;
+  const sourceContent = body.sourceContent;
+  if (sourceContent !== null && typeof sourceContent !== 'string') return null;
+  return {
+    guildId: body.guildId,
+    tags: body.tags,
+    sourceContent: sourceContent as string | null
+  };
+}
