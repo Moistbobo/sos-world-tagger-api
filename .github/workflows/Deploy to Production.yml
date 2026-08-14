@@ -59,8 +59,8 @@ jobs:
             set -e
             export PATH="$HOME/.npm-global/bin:$PATH"
             cd ~/release/sos-world-tagger-api
-            git fetch origin release
-            git reset --hard origin/release
+            git fetch origin production
+            git reset --hard origin/production
             pnpm install
             pnpm exec tsc
             pm2 restart ecosystem.config.js
