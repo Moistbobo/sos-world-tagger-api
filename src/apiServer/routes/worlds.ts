@@ -38,10 +38,10 @@ router.get(
         ? query.highPriority === 'true'
         : undefined;
 
-    const includeHighPriority =
+    const canManage =
       request.token?.role.permissions.includes('worlds:write') ?? false;
 
-    if (highPriority === true && !includeHighPriority) {
+    if (highPriority === true && !canManage) {
       return response.status(403).send({ error: 'Forbidden' });
     }
 
@@ -109,7 +109,12 @@ router.get(
       total,
       limit,
       offset,
-      worlds: rows.map((row) => sanitizeRecord(row, { includeHighPriority }))
+      worlds: rows.map((row) =>
+        sanitizeRecord(row, {
+          includeHighPriority: canManage,
+          includeQuality: canManage
+        })
+      )
     });
   }
 );
@@ -165,11 +170,16 @@ router.get(
       return response.status(404).send({ error: 'World not found' });
     }
 
-    const includeHighPriority =
+    const canManage =
       request.token?.role.permissions.includes('worlds:write') ?? false;
 
     // Return first live match (most recent by created_at DESC)
-    response.send(sanitizeRecord(matches[0], { includeHighPriority }));
+    response.send(
+      sanitizeRecord(matches[0], {
+        includeHighPriority: canManage,
+        includeQuality: canManage
+      })
+    );
   }
 );
 

@@ -308,6 +308,44 @@ describe('High priority worlds API', () => {
     });
   });
 
+  describe('GET /api/worlds quality field', () => {
+    it('includes quality for worlds:write tokens', async () => {
+      const response = await request(app).get('/api/worlds').set(AUTH);
+
+      expect(response.status).toBe(200);
+      expect(response.body.worlds[0].quality).toBe('good');
+    });
+
+    it('omits quality for viewer tokens', async () => {
+      mockTokenRepo(['worlds:read', 'tags:read', 'meta:read']);
+
+      const response = await request(app).get('/api/worlds').set(AUTH);
+
+      expect(response.status).toBe(200);
+      expect(response.body.worlds[0]).not.toHaveProperty('quality');
+    });
+
+    it('includes quality on the detail route for worlds:write tokens', async () => {
+      const response = await request(app)
+        .get(`/api/worlds/${WORLD_ID}`)
+        .set(AUTH);
+
+      expect(response.status).toBe(200);
+      expect(response.body.quality).toBe('good');
+    });
+
+    it('omits quality on the detail route for viewer tokens', async () => {
+      mockTokenRepo(['worlds:read', 'tags:read', 'meta:read']);
+
+      const response = await request(app)
+        .get(`/api/worlds/${WORLD_ID}`)
+        .set(AUTH);
+
+      expect(response.status).toBe(200);
+      expect(response.body).not.toHaveProperty('quality');
+    });
+  });
+
   describe('GET /api/worlds?highPriority=true', () => {
     it('returns 403 for viewer tokens', async () => {
       mockTokenRepo(['worlds:read', 'tags:read', 'meta:read']);

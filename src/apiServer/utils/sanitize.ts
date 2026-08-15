@@ -11,7 +11,7 @@ function buildWorldUrl(worldId: string): string {
 
 export function sanitizeRecord(
   raw: WorldRecord,
-  options?: { includeHighPriority?: boolean }
+  options?: { includeHighPriority?: boolean; includeQuality?: boolean }
 ) {
   return {
     worldId: raw.worldId,
@@ -23,7 +23,9 @@ export function sanitizeRecord(
     tags: raw.tags,
     imageUrl: raw.imageUrl,
     vrchatUrl: buildWorldUrl(raw.worldId),
-    quality: raw.quality ?? null,
+    ...(options?.includeQuality === true && {
+      quality: raw.quality ?? null
+    }),
     ...(options?.includeHighPriority === true && {
       highPriority: raw.highPriority ?? false
     }),

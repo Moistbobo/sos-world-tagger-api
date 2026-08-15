@@ -58,7 +58,7 @@ router.post(
         return response.status(200).send({
           duplicate: true,
           existingMessageId: result.existingMessageId,
-          world: sanitizeRecord(result.world)
+          world: sanitizeRecord(result.world, { includeQuality: true })
         });
       }
       return response.status(201).send({
