@@ -13,6 +13,10 @@ jest.mock('../tags/extractor', () => ({
   extractTags: jest.fn()
 }));
 
+jest.mock('./packageSizes', () => ({
+  getPackageSizesInMb: jest.fn()
+}));
+
 jest.mock('../logger', () => ({
   __esModule: true,
   default: {
@@ -26,6 +30,7 @@ jest.mock('../logger', () => ({
 import { getWorldRepository } from '../db/worldRepository';
 import { fetchWorldData } from '../vrchat/client';
 import { extractTags } from '../tags/extractor';
+import { getPackageSizesInMb } from './packageSizes';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
   fn as jest.MockedFunction<T>;
@@ -90,16 +95,19 @@ describe('addWorld', () => {
     });
     asMock(fetchWorldData).mockResolvedValue(WORLD_DATA as never);
     asMock(extractTags).mockReturnValue(['horror', 'game']);
+    asMock(getPackageSizesInMb).mockResolvedValue([104.5, 78.2]);
 
     const result = await addWorld(REQUEST);
 
     expect(result.status).toBe('created');
     if (result.status === 'created') {
       expect(result.world.platforms).toEqual(['standalonewindows', 'android']);
+      expect(result.world.packageSizes).toEqual([104.5, 78.2]);
       expect(result.world.tags).toEqual(['horror', 'game']);
       expect(result.world.internalAddDate).toBeDefined();
       expect(result.world.vrchatData).toBe(JSON.stringify(WORLD_DATA));
     }
+    expect(getPackageSizesInMb).toHaveBeenCalledWith(WORLD_DATA);
     expect(getWorldRepository().upsert).toHaveBeenCalledTimes(1);
   });
 
@@ -113,6 +121,7 @@ describe('addWorld', () => {
     });
     asMock(fetchWorldData).mockResolvedValue(WORLD_DATA as never);
     asMock(extractTags).mockReturnValue([]);
+    asMock(getPackageSizesInMb).mockResolvedValue([]);
 
     const result = await addWorld({ ...REQUEST, checkDuplicate: false });
 
@@ -127,6 +136,7 @@ describe('addWorld', () => {
     });
     asMock(fetchWorldData).mockResolvedValue(WORLD_DATA as never);
     asMock(extractTags).mockReturnValue([]);
+    asMock(getPackageSizesInMb).mockResolvedValue([]);
 
     const result = await addWorld({ ...REQUEST, messageTimestamp: 1700000000 });
 

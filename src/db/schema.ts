@@ -145,6 +145,27 @@ const MIGRATIONS: Migration[] = [
           ('admin',   '["worlds:read","tags:read","meta:read","worlds:write"]');
       `);
     }
+  },
+  {
+    name: '007_add_package_sizes_column',
+    run: (db) => {
+      const needsColumn = (table: string) => {
+        const columns = db
+          .prepare(`PRAGMA table_info(${table})`)
+          .all() as Array<{ name: string }>;
+        return !columns.some((c) => c.name === 'package_sizes');
+      };
+
+      if (needsColumn('world_records')) {
+        db.exec(`ALTER TABLE world_records ADD COLUMN package_sizes TEXT`);
+      }
+
+      if (needsColumn('deleted_world_records')) {
+        db.exec(
+          `ALTER TABLE deleted_world_records ADD COLUMN package_sizes TEXT`
+        );
+      }
+    }
   }
 ];
 

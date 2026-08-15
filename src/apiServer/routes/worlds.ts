@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getWorldRepository } from '../../db/worldRepository';
+import { searchWorldsByName } from '../../vrchat/client';
 import { parseIntegerParam, parseStringListQuery } from '../utils/queryParams';
 import { sanitizeRecord } from '../utils/sanitize';
 import { requirePermission } from '../middleware/auth';
@@ -96,6 +97,28 @@ router.get(
       offset,
       worlds: rows.map(sanitizeRecord)
     });
+  }
+);
+
+// GET /api/worlds/search?name=... — live VRChat world search by name
+router.get(
+  '/api/worlds/search',
+  requirePermission('worlds:read'),
+  async (request, response) => {
+    const name =
+      typeof request.query.name === 'string' ? request.query.name.trim() : '';
+    if (!name) {
+      return response
+        .status(400)
+        .send({ error: 'name query parameter is required' });
+    }
+
+    try {
+      const worlds = await searchWorldsByName(name);
+      response.send({ worlds });
+    } catch {
+      response.status(502).send({ error: 'Failed to search worlds on VRChat' });
+    }
   }
 );
 

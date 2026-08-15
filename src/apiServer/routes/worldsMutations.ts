@@ -1,9 +1,12 @@
 import { Router } from 'express';
 import { getWorldRepository } from '../../db/worldRepository';
 import { addWorld, WorldServiceError } from '../../worlds/service';
+import { extractAllWorldIdsFromMessage } from '../../extraction/pipeline';
+import { extractTags } from '../../tags/extractor';
 import { sanitizeRecord } from '../utils/sanitize';
 import {
   parseAddWorldBody,
+  parseExtractWorldsBody,
   parseGuildIdBody,
   parseUpdateQualityBody,
   parseUpdateTagsBody
@@ -11,6 +14,30 @@ import {
 import { requirePermission } from '../middleware/auth';
 
 const router = Router();
+
+// POST /api/worlds/extract — resolve world IDs from message content
+// (direct links, Twitter/X links, plain-text world names)
+router.post(
+  '/api/worlds/extract',
+  requirePermission('worlds:read'),
+  async (request, response) => {
+    const body = parseExtractWorldsBody(request.body);
+    if (!body) {
+      return response
+        .status(400)
+        .send({ error: 'Invalid body. Expected { content }' });
+    }
+
+    try {
+      const worlds = await extractAllWorldIdsFromMessage(body.content);
+      response.send({ worlds });
+    } catch {
+      response
+        .status(502)
+        .send({ error: 'Failed to extract worlds from content' });
+    }
+  }
+);
 
 // POST /api/worlds
 router.post(
@@ -103,7 +130,7 @@ router.put(
     const body = parseUpdateTagsBody(request.body);
     if (!body) {
       return response.status(400).send({
-        error: 'Invalid body. Expected { guildId, tags, sourceContent }'
+        error: 'Invalid body. Expected { guildId, sourceContent }'
       });
     }
 
@@ -113,13 +140,14 @@ router.put(
       return response.status(404).send({ error: 'World not found' });
     }
 
+    const tags = extractTags(body.tagSource ?? body.sourceContent ?? '');
     const updated = repo.updateTags(
       worldId,
       body.guildId,
-      body.tags,
+      tags,
       body.sourceContent
     );
-    response.send({ updated });
+    response.send({ updated, tags });
   }
 );
 

@@ -1,5 +1,6 @@
 import { World } from 'vrchat';
 import { fetchWorldData } from '../vrchat/client';
+import { getPackageSizesInMb } from './packageSizes';
 import { extractTags } from '../tags/extractor';
 import {
   getDiscordMessageTimestampSeconds,
@@ -44,6 +45,7 @@ function buildWorldRecord(
   messageId: string,
   content: string,
   worldData: World,
+  packageSizes: (number | null)[],
   messageTimestamp?: number
 ): WorldRecord {
   return {
@@ -60,6 +62,7 @@ function buildWorldRecord(
     vrchatData: JSON.stringify(worldData, (_, v) =>
       typeof v === 'bigint' ? v.toString() : v
     ),
+    packageSizes,
     internalAddDate:
       messageTimestamp ?? getDiscordMessageTimestampSeconds(messageId)
   };
@@ -98,12 +101,15 @@ export async function addWorld(req: AddWorldRequest): Promise<AddWorldResult> {
     );
   }
 
+  const packageSizes = await getPackageSizesInMb(worldData);
+
   const record = buildWorldRecord(
     req.worldId,
     req.guildId,
     req.messageId,
     req.content,
     worldData,
+    packageSizes,
     req.messageTimestamp
   );
   repo.upsert(record);

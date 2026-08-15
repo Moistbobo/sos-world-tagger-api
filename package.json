@@ -16,7 +16,8 @@
     "token:revoke": "jiti src/tokens/cli.ts token:revoke",
     "role:list": "jiti src/tokens/cli.ts role:list",
     "role:create": "jiti src/tokens/cli.ts role:create",
-    "role:update": "jiti src/tokens/cli.ts role:update"
+    "role:update": "jiti src/tokens/cli.ts role:update",
+    "backfill:sizes": "jiti src/scripts/backfill-package-sizes.ts"
   },
   "license": "ISC",
   "devDependencies": {
@@ -45,6 +46,7 @@
     "better-sqlite3": "^12.10.0",
     "dotenv": "^17.2.1",
     "express": "^5.2.1",
+    "fastest-levenshtein": "^1.0.16",
     "keyv-file": "^5.1.3",
     "rotating-file-stream": "^3.2.6",
     "tslog": "^4.9.3",
