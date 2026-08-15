@@ -45,6 +45,14 @@ jest.mock('../worlds/service', () => ({
   }
 }));
 
+jest.mock('../extraction/pipeline', () => ({
+  extractAllWorldIdsFromMessage: jest.fn()
+}));
+
+jest.mock('../tags/extractor', () => ({
+  extractTags: jest.fn()
+}));
+
 jest.mock('../vrchat/client', () => ({
   fetchWorldData: jest.fn(),
   isCurrentUser: jest.fn(),
@@ -54,6 +62,8 @@ jest.mock('../vrchat/client', () => ({
 import { getWorldRepository } from '../db/worldRepository';
 import { getTokenRepository } from '../db/tokenRepository';
 import { addWorld } from '../worlds/service';
+import { extractAllWorldIdsFromMessage } from '../extraction/pipeline';
+import { extractTags } from '../tags/extractor';
 import { createApiServer } from './index';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
@@ -157,6 +167,7 @@ describe('API mutations', () => {
           imageUrl: 'https://example.com/img.png',
           sourceContent: 'original message',
           vrchatData: '{"id":"wrld_x"}',
+          packageSizes: [104.5],
           quality: null,
           createdAt: 1717257600,
           updatedAt: 1717257600,
@@ -177,6 +188,7 @@ describe('API mutations', () => {
       expect(body.world.guildId).toBe(VALID_BODY.guildId);
       expect(body.world.messageId).toBe(VALID_BODY.messageId);
       expect(body.world.vrchatData).toBe('{"id":"wrld_x"}');
+      expect(body.world.packageSizes).toEqual([104.5]);
       expect(body.world.tags).toEqual(['horror', 'game']);
     });
 
@@ -194,6 +206,7 @@ describe('API mutations', () => {
           imageUrl: 'https://example.com/img.png',
           sourceContent: null,
           vrchatData: null,
+          packageSizes: [],
           quality: null,
           createdAt: 1717257600,
           updatedAt: 1717257600,
@@ -231,6 +244,61 @@ describe('API mutations', () => {
       expect(response.status).toBe(502);
       expect(response.body).toEqual({
         error: 'Failed to fetch world data from VRChat'
+      });
+    });
+  });
+
+  describe('POST /api/worlds/extract', () => {
+    it('returns 401 without a token', async () => {
+      const response = await request(app)
+        .post('/api/worlds/extract')
+        .send({ content: 'hello' });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('returns 400 on invalid body', async () => {
+      const response = await request(app)
+        .post('/api/worlds/extract')
+        .set(AUTH)
+        .send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid body');
+    });
+
+    it('returns extracted worlds from content', async () => {
+      asMock(extractAllWorldIdsFromMessage).mockResolvedValue([
+        { worldId: 'wrld_abc', sourceContent: 'content' }
+      ]);
+
+      const response = await request(app)
+        .post('/api/worlds/extract')
+        .set(AUTH)
+        .send({ content: 'https://vrchat.com/home/world/wrld_abc' });
+
+      expect(response.status).toBe(200);
+      expect(extractAllWorldIdsFromMessage).toHaveBeenCalledWith(
+        'https://vrchat.com/home/world/wrld_abc'
+      );
+      expect(response.body).toEqual({
+        worlds: [{ worldId: 'wrld_abc', sourceContent: 'content' }]
+      });
+    });
+
+    it('returns 502 when extraction fails', async () => {
+      asMock(extractAllWorldIdsFromMessage).mockRejectedValue(
+        new Error('vxtwitter down')
+      );
+
+      const response = await request(app)
+        .post('/api/worlds/extract')
+        .set(AUTH)
+        .send({ content: 'https://x.com/user/status/1' });
+
+      expect(response.status).toBe(502);
+      expect(response.body).toEqual({
+        error: 'Failed to extract worlds from content'
       });
     });
   });
@@ -331,7 +399,8 @@ describe('API mutations', () => {
   });
 
   describe('PUT /api/worlds/:worldId/tags', () => {
-    it('updates tags and returns 200 with updated: true', async () => {
+    it('computes tags server-side and returns 200 with updated: true', async () => {
+      asMock(extractTags).mockReturnValue(['horror', 'game']);
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({
           getByWorldAndGuild: jest.fn(() => ({})),
@@ -344,19 +413,73 @@ describe('API mutations', () => {
         .set(AUTH)
         .send({
           guildId: 'guild-1',
-          tags: ['horror', 'game'],
-          sourceContent: 'some source'
+          sourceContent: 'Tags: horror, game'
         });
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ updated: true });
+      expect(extractTags).toHaveBeenCalledWith('Tags: horror, game');
+      expect(response.body).toEqual({
+        updated: true,
+        tags: ['horror', 'game']
+      });
     });
 
-    it('returns 400 when tags is not an array of strings', async () => {
+    it('computes tags from tagSource but stores sourceContent', async () => {
+      asMock(extractTags).mockReturnValue(['horror', 'game']);
+      const updateTags = jest.fn(() => true);
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({
+          getByWorldAndGuild: jest.fn(() => ({})),
+          updateTags
+        })
+      );
+
       const response = await request(app)
         .put(`/api/worlds/${VALID_BODY.worldId}/tags`)
         .set(AUTH)
-        .send({ guildId: 'guild-1', tags: 'horror' });
+        .send({
+          guildId: 'guild-1',
+          sourceContent: 'per-world raw source',
+          tagSource: 'combined cleaned tag source'
+        });
+
+      expect(response.status).toBe(200);
+      expect(extractTags).toHaveBeenCalledWith('combined cleaned tag source');
+      expect(updateTags).toHaveBeenCalledWith(
+        VALID_BODY.worldId,
+        'guild-1',
+        ['horror', 'game'],
+        'per-world raw source'
+      );
+      expect(response.body).toEqual({
+        updated: true,
+        tags: ['horror', 'game']
+      });
+    });
+
+    it('returns 200 with updated: false when nothing changed', async () => {
+      asMock(extractTags).mockReturnValue(['horror']);
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({
+          getByWorldAndGuild: jest.fn(() => ({})),
+          updateTags: jest.fn(() => false)
+        })
+      );
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', sourceContent: 'Tags: horror' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ updated: false, tags: ['horror'] });
+    });
+
+    it('returns 400 when sourceContent is missing', async () => {
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1' });
 
       expect(response.status).toBe(400);
     });
@@ -369,11 +492,7 @@ describe('API mutations', () => {
       const response = await request(app)
         .put(`/api/worlds/${VALID_BODY.worldId}/tags`)
         .set(AUTH)
-        .send({
-          guildId: 'guild-1',
-          tags: ['horror'],
-          sourceContent: null
-        });
+        .send({ guildId: 'guild-1', sourceContent: 'Tags: horror' });
 
       expect(response.status).toBe(404);
     });

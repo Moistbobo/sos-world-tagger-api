@@ -19,9 +19,13 @@ export interface UpdateQualityBody {
 
 export interface UpdateTagsBody {
   guildId: string;
-  tags: string[];
   sourceContent: string | null;
+  tagSource?: string;
   messageTimestamp?: number;
+}
+
+export interface ExtractWorldsBody {
+  content: string;
 }
 
 const WORLD_ID_REGEX = /^wrld_[a-f0-9-]{36}$/;
@@ -99,13 +103,23 @@ export function parseUpdateQualityBody(
   };
 }
 
+export function parseExtractWorldsBody(
+  body: unknown
+): ExtractWorldsBody | null {
+  if (!isObject(body)) return null;
+  if (typeof body.content !== 'string' || body.content.trim().length === 0) {
+    return null;
+  }
+  return { content: body.content };
+}
+
 export function parseUpdateTagsBody(body: unknown): UpdateTagsBody | null {
   if (!isObject(body)) return null;
   if (!isNonEmptyString(body.guildId)) return null;
-  if (!Array.isArray(body.tags)) return null;
-  if (!body.tags.every((t) => typeof t === 'string')) return null;
   const sourceContent = body.sourceContent;
   if (sourceContent !== null && typeof sourceContent !== 'string') return null;
+  const tagSource = body.tagSource;
+  if (tagSource !== undefined && typeof tagSource !== 'string') return null;
   const messageTimestamp = body.messageTimestamp;
   if (
     messageTimestamp !== undefined &&
@@ -115,8 +129,8 @@ export function parseUpdateTagsBody(body: unknown): UpdateTagsBody | null {
   }
   return {
     guildId: body.guildId,
-    tags: body.tags,
     sourceContent: sourceContent as string | null,
+    tagSource: tagSource as string | undefined,
     messageTimestamp: messageTimestamp as number | undefined
   };
 }

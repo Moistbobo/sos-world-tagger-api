@@ -34,12 +34,14 @@ jest.mock('../logger', () => ({
 
 jest.mock('../vrchat/client', () => ({
   fetchWorldData: jest.fn(),
+  searchWorldsByName: jest.fn(),
   isCurrentUser: jest.fn(),
   vrchat: { client: {} }
 }));
 
 import { getWorldRepository } from '../db/worldRepository';
 import { getTokenRepository } from '../db/tokenRepository';
+import { searchWorldsByName } from '../vrchat/client';
 import { createApiServer } from './index';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
@@ -61,6 +63,7 @@ function createMockRepo(overrides: Record<string, unknown> = {}) {
           imageUrl: 'https://example.com/img.png',
           sourceContent: null,
           vrchatData: null,
+          packageSizes: [104.5, 78.2],
           quality: 'good',
           createdAt: 1717257600,
           updatedAt: 1717257600
@@ -78,6 +81,7 @@ function createMockRepo(overrides: Record<string, unknown> = {}) {
         imageUrl: 'https://example.com/img.png',
         sourceContent: null,
         vrchatData: null,
+        packageSizes: [104.5, 78.2],
         quality: 'good',
         createdAt: 1717257600,
         updatedAt: 1717257600
@@ -254,6 +258,7 @@ describe('API Server', () => {
       expect(world.name).toBe('Spooky Mansion');
       expect(world.vrchatUrl).toBe('https://vrchat.com/home/world/wrld_abc123');
       expect(world.quality).toBe('good');
+      expect(world.packageSizes).toEqual([104.5, 78.2]);
       expect(world.createdAt).toBe('2024-06-01T16:00:00.000Z');
 
       // Server-identifying fields must be stripped
@@ -364,6 +369,62 @@ describe('API Server', () => {
       expect(response.status).toBe(404);
       expect(response.body).toEqual({
         error: 'World not found'
+      });
+    });
+  });
+
+  describe('GET /api/worlds/search', () => {
+    it('returns worlds matching the name query', async () => {
+      asMock(searchWorldsByName).mockResolvedValue([
+        {
+          id: 'wrld_abc123',
+          name: 'Midnight Bar',
+          authorName: 'VRChat',
+          capacity: 40,
+          imageUrl: 'https://example.com/img.png',
+          unityPackages: []
+        }
+      ]);
+
+      const response = await request(app)
+        .get('/api/worlds/search?name=Midnight%20Bar')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(searchWorldsByName).toHaveBeenCalledWith('Midnight Bar');
+      expect(response.body.worlds).toEqual([
+        {
+          id: 'wrld_abc123',
+          name: 'Midnight Bar',
+          authorName: 'VRChat',
+          capacity: 40,
+          imageUrl: 'https://example.com/img.png',
+          unityPackages: []
+        }
+      ]);
+    });
+
+    it('returns 400 when name is missing', async () => {
+      const response = await request(app)
+        .get('/api/worlds/search')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: 'name query parameter is required'
+      });
+    });
+
+    it('returns 502 when the VRChat search fails', async () => {
+      asMock(searchWorldsByName).mockRejectedValue(new Error('vrc down'));
+
+      const response = await request(app)
+        .get('/api/worlds/search?name=Midnight')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(502);
+      expect(response.body).toEqual({
+        error: 'Failed to search worlds on VRChat'
       });
     });
   });

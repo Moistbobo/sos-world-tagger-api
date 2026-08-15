@@ -81,7 +81,7 @@ pnpm role:update -- --name curator-v2 --add meta:read --remove tags:read
 
 | Permission | Routes |
 |------------|--------|
-| `worlds:read` | `GET /api/worlds`, `GET /api/worlds/pairs`, `GET /api/worlds/:worldId` |
+| `worlds:read` | `GET /api/worlds`, `GET /api/worlds/search`, `GET /api/worlds/pairs`, `GET /api/worlds/:worldId`, `POST /api/worlds/extract` |
 | `worlds:write` | `POST /api/worlds`, `DELETE /api/worlds/:worldId`, `PUT /api/worlds/:worldId/quality`, `PUT /api/worlds/:worldId/tags` |
 | `tags:read` | `GET /api/tags` |
 | `meta:read` | `GET /api/meta` |
@@ -189,7 +189,50 @@ GET /api/worlds?dayRange=7&tag=horror&quality=good
 
 ---
 
-### 3. Get Single World
+### 3. Search Worlds
+
+```
+GET /api/worlds/search?name=<world-name>
+```
+
+Performs a live fuzzy search against the VRChat API and returns the top
+matching worlds. Used by the bot to resolve a world ID from a plain-text
+world name (e.g. Twitter/X posts without a direct world link).
+
+**Query parameter**
+
+| Parameter | Type   | Required | Description |
+|-----------|--------|----------|-------------|
+| `name`    | string | yes      | World name to search for. |
+
+**Response**
+
+```json
+{
+  "worlds": [
+    {
+      "id": "wrld_abc123",
+      "name": "Midnight Bar",
+      "authorName": "VRChat",
+      "capacity": 40,
+      "imageUrl": "https://api.vrchat.cloud/api/1/file/...",
+      "unityPackages": []
+    }
+  ]
+}
+```
+
+**Errors**
+
+| Status | Body |
+|--------|------|
+| `400`  | `{ "error": "name query parameter is required" }` |
+| `401`  | `{ "error": "Unauthorized" }` |
+| `502`  | `{ "error": "Failed to search worlds on VRChat" }` |
+
+---
+
+### 4. Get Single World
 
 ```
 GET /api/worlds/:worldId
@@ -215,7 +258,7 @@ Status code: **404**
 
 ---
 
-### 4. List All Tags
+### 5. List All Tags
 
 ```
 GET /api/tags
@@ -237,7 +280,7 @@ common first).
 
 ---
 
-### 5. Metadata Counts
+### 6. Metadata Counts
 
 ```
 GET /api/meta
@@ -264,7 +307,7 @@ across all world records.
 
 The bot uses these endpoints to add, update, and delete worlds over HTTP.
 
-### 6. Add World
+### 7. Add World
 
 ```
 POST /api/worlds
@@ -327,7 +370,46 @@ from `existingMessageId` and the channel.
 
 ---
 
-### 7. Delete World
+### 8. Extract Worlds
+
+```
+POST /api/worlds/extract
+```
+
+Resolves VRChat world IDs from message content. Handles direct world links,
+Twitter/X links (fetching the tweet via VxTwitter), and plain-text world
+names (VRChat search + fuzzy matching). All extraction logic lives in the
+API; the bot just forwards message content.
+
+**Request body**
+
+```json
+{
+  "content": "https://x.com/someuser/status/123"
+}
+```
+
+**Response** — status `200`:
+
+```json
+{
+  "worlds": [
+    { "worldId": "wrld_abc123", "sourceContent": "https://x.com/someuser/status/123" }
+  ]
+}
+```
+
+**Errors**
+
+| Status | Body |
+|--------|------|
+| `400`  | `{ "error": "Invalid body. Expected { content }" }` |
+| `401`  | `{ "error": "Unauthorized" }` |
+| `502`  | `{ "error": "Failed to extract worlds from content" }` |
+
+---
+
+### 9. Delete World
 
 ```
 DELETE /api/worlds/:worldId
@@ -356,7 +438,7 @@ removes it from the live table. This is the undo-tag / remove-reaction flow.
 
 ---
 
-### 8. Set Quality
+### 10. Set Quality
 
 ```
 PUT /api/worlds/:worldId/quality
@@ -392,32 +474,41 @@ This is the 👍/👎 reaction flow. No-op when the quality is unchanged.
 
 ---
 
-### 9. Set Tags
+### 11. Set Tags
 
 ```
 PUT /api/worlds/:worldId/tags
 ```
 
-Sets the tags and source content on the `(worldId, guildId)` record. This is
-the crawlHistory backfill flow. No-op when nothing changed.
+Recomputes tags and updates the `(worldId, guildId)` record. This is the
+crawlHistory backfill flow. Tags are extracted server-side using the shared
+taxonomy; the client no longer sends them. No-op when nothing changed.
+
+`sourceContent` is persisted verbatim as the record's source text. When the
+bot backfills a multi-world message, it additionally sends `tagSource` (the
+combined tag-extraction input); the server computes tags from
+`tagSource ?? sourceContent` but stores only `sourceContent`. This keeps
+per-world stored source text faithful while deriving tags from the same
+combined input the live flow uses.
 
 **Request body**
 
 ```json
 {
   "guildId": "123456789012345678",
-  "tags": ["horror", "game"],
-  "sourceContent": "the original message text"
+  "sourceContent": "the original message text",
+  "tagSource": "combined cleaned tag source (optional)"
 }
 ```
 
-`sourceContent` may be `null`.
+`sourceContent` may be `null`. `tagSource` is optional.
 
 **Success** — status `200`:
 
 ```json
 {
-  "updated": true
+  "updated": true,
+  "tags": ["horror", "game"]
 }
 ```
 
@@ -425,7 +516,7 @@ the crawlHistory backfill flow. No-op when nothing changed.
 
 | Status | Body |
 |--------|------|
-| `400`  | `{ "error": "Invalid body. Expected { guildId, tags, sourceContent }" }` |
+| `400`  | `{ "error": "Invalid body. Expected { guildId, sourceContent }" }` |
 | `401`  | `{ "error": "Unauthorized" }` |
 | `404`  | `{ "error": "World not found" }` |
 
@@ -481,6 +572,10 @@ curl -H "Authorization: Bearer my-token" \
 curl -H "Authorization: Bearer my-token" \
   "http://localhost:3000/api/worlds/wrld_abc123"
 
+# Search worlds by name (live VRChat search)
+curl -H "Authorization: Bearer my-token" \
+  "http://localhost:3000/api/worlds/search?name=Midnight%20Bar"
+
 # List all tags
 curl -H "Authorization: Bearer my-token" \
   http://localhost:3000/api/tags
@@ -520,13 +615,18 @@ curl -X PUT -H "Authorization: Bearer my-token" \
   -d '{"guildId": "123456789012345678", "quality": "good"}' \
   http://localhost:3000/api/worlds/wrld_abc123/quality
 
-# Set tags (crawlHistory backfill)
+# Set tags (crawlHistory backfill; tags computed server-side)
 curl -X PUT -H "Authorization: Bearer my-token" \
   -H "Content-Type: application/json" \
   -d '{
     "guildId": "123456789012345678",
-    "tags": ["horror", "game"],
     "sourceContent": "the original message text"
   }' \
   http://localhost:3000/api/worlds/wrld_abc123/tags
+
+# Extract world IDs from message content (Twitter/X resolution included)
+curl -X POST -H "Authorization: Bearer my-token" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "https://x.com/someuser/status/123"}' \
+  http://localhost:3000/api/worlds/extract
 ```

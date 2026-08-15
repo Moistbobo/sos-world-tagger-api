@@ -1,4 +1,9 @@
-import type { CurrentUser, RequiresTwoFactorAuth, World } from 'vrchat';
+import type {
+  CurrentUser,
+  LimitedWorld,
+  RequiresTwoFactorAuth,
+  World
+} from 'vrchat';
 import { VRChat } from 'vrchat';
 import Config from '../config';
 import KeyvFile from 'keyv-file';
@@ -38,4 +43,18 @@ export async function fetchWorldData(worldId: string): Promise<World> {
     path: { worldId }
   });
   return data;
+}
+
+/**
+ * Searches VRChat worlds by name (fuzzy, relevance-sorted).
+ * Returns the limited world list, or an empty array when the search fails.
+ */
+export async function searchWorldsByName(
+  worldName: string
+): Promise<LimitedWorld[]> {
+  const searchResults = await vrchat.searchWorlds({
+    client: vrchat.client,
+    query: { search: `"${worldName}"`, fuzzy: true, n: 10, sort: 'relevance' }
+  });
+  return searchResults.data ?? [];
 }
