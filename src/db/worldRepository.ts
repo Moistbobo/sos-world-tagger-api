@@ -15,6 +15,7 @@ export interface WorldRecord {
   imageUrl: string | null;
   sourceContent: string | null;
   vrchatData: string | null;
+  packageSizes: (number | null)[];
   quality?: 'good' | 'bad' | null;
   createdAt?: number;
   updatedAt?: number;
@@ -35,6 +36,9 @@ function rowToRecord(row: Record<string, unknown>): WorldRecord {
     imageUrl: row.image_url as string | null,
     sourceContent: row.source_content as string | null,
     vrchatData: row.vrchat_data as string | null,
+    packageSizes: safeJsonParse(row.package_sizes as string | null, []) as (
+      number | null
+    )[],
     quality: (row.quality as 'good' | 'bad' | null) ?? null,
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
@@ -68,9 +72,9 @@ export class WorldRepository {
     const sql = `
       INSERT INTO world_records
         (world_id, guild_id, message_id, name, author_name, capacity,
-         platforms, tags, image_url, source_content, vrchat_data, created_at, updated_at, internal_add_date)
+         platforms, tags, image_url, source_content, vrchat_data, package_sizes, created_at, updated_at, internal_add_date)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, strftime('%s','now')), strftime('%s','now'), COALESCE(?, strftime('%s','now')))
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, strftime('%s','now')), strftime('%s','now'), COALESCE(?, strftime('%s','now')))
       ON CONFLICT(world_id, guild_id) DO UPDATE SET
         name = excluded.name,
         author_name = excluded.author_name,
@@ -80,6 +84,7 @@ export class WorldRepository {
         image_url = excluded.image_url,
         source_content = excluded.source_content,
         vrchat_data = excluded.vrchat_data,
+        package_sizes = excluded.package_sizes,
         updated_at = excluded.updated_at,
         internal_add_date = COALESCE(world_records.internal_add_date, excluded.internal_add_date)
     `;
@@ -97,6 +102,7 @@ export class WorldRepository {
       record.imageUrl,
       record.sourceContent,
       record.vrchatData,
+      JSON.stringify(record.packageSizes),
       record.createdAt ?? null,
       record.internalAddDate ?? null
     );
@@ -170,8 +176,8 @@ export class WorldRepository {
   deleteByWorldAndGuild(worldId: string, guildId: string): boolean {
     const archiveSql = `
       INSERT INTO deleted_world_records
-        (world_id, guild_id, message_id, name, author_name, capacity, platforms, tags, image_url, source_content, vrchat_data, created_at, updated_at, internal_add_date)
-      SELECT world_id, guild_id, message_id, name, author_name, capacity, platforms, tags, image_url, source_content, vrchat_data, created_at, updated_at, internal_add_date
+        (world_id, guild_id, message_id, name, author_name, capacity, platforms, tags, image_url, source_content, vrchat_data, package_sizes, created_at, updated_at, internal_add_date)
+      SELECT world_id, guild_id, message_id, name, author_name, capacity, platforms, tags, image_url, source_content, vrchat_data, package_sizes, created_at, updated_at, internal_add_date
       FROM world_records
       WHERE world_id = ? AND guild_id = ?
     `;

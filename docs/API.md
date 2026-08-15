@@ -442,6 +442,7 @@ Each world object returned by the API has the following fields:
 | `authorName`      | string \| null           | Name of the author / creator. |
 | `capacity`        | number \| null           | Maximum player capacity. |
 | `platforms`       | string[]                 | Supported platforms (`android`, `standalonewindows`, etc.). |
+| `packageSizes`    | (number \| null)[]       | Download size in MB per platform, aligned 1:1 with `platforms`. `null` when the size could not be determined. |
 | `tags`            | string[]                 | Tags applied to this world record. |
 | `imageUrl`        | string \| null           | Thumbnail image URL from VRChat API. |
 | `vrchatUrl`       | string                   | Link to the world on the VRChat website. |
