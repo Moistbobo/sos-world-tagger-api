@@ -17,13 +17,14 @@ export interface WorldRecord {
   vrchatData: string | null;
   packageSizes: (number | null)[];
   quality?: 'good' | 'bad' | null;
+  highPriority?: boolean;
   createdAt?: number;
   updatedAt?: number;
   internalAddDate?: number | null;
 }
 
 function rowToRecord(row: Record<string, unknown>): WorldRecord {
-  return {
+  const record: WorldRecord = {
     id: row.id as number,
     worldId: row.world_id as string,
     guildId: row.guild_id as string,
@@ -44,6 +45,10 @@ function rowToRecord(row: Record<string, unknown>): WorldRecord {
     updatedAt: row.updated_at as number,
     internalAddDate: (row.internal_add_date as number | null) ?? null
   };
+  if (row.high_priority !== undefined) {
+    record.highPriority = Boolean(row.high_priority);
+  }
+  return record;
 }
 
 function safeJsonParse<T>(value: string | null, fallback: T): T {
@@ -147,8 +152,14 @@ export class WorldRepository {
    * Get all guild-scoped records for a given world ID.
    */
   getByWorldId(worldId: string): WorldRecord[] {
-    const sql =
-      'SELECT * FROM world_records WHERE world_id = ? ORDER BY created_at DESC';
+    const sql = `
+      SELECT wr.*, (hp.world_id IS NOT NULL) AS high_priority
+      FROM world_records wr
+      LEFT JOIN high_priority_worlds hp
+        ON hp.world_id = wr.world_id AND hp.guild_id = wr.guild_id
+      WHERE wr.world_id = ?
+      ORDER BY wr.created_at DESC
+    `;
     const stmt = this.db.prepare(sql);
     const rows = stmt.all(worldId) as Record<string, unknown>[];
     return rows.map(rowToRecord);
@@ -161,8 +172,14 @@ export class WorldRepository {
     worldId: string,
     guildId: string
   ): WorldRecord | undefined {
-    const sql =
-      'SELECT * FROM world_records WHERE world_id = ? AND guild_id = ? LIMIT 1';
+    const sql = `
+      SELECT wr.*, (hp.world_id IS NOT NULL) AS high_priority
+      FROM world_records wr
+      LEFT JOIN high_priority_worlds hp
+        ON hp.world_id = wr.world_id AND hp.guild_id = wr.guild_id
+      WHERE wr.world_id = ? AND wr.guild_id = ?
+      LIMIT 1
+    `;
     const stmt = this.db.prepare(sql);
     const row = stmt.get(worldId, guildId) as
       Record<string, unknown> | undefined;
@@ -310,31 +327,32 @@ export class WorldRepository {
     maxCapacity?: number;
     worldIds?: string[];
     dayRange?: number;
+    highPriorityOnly?: boolean;
   }): { whereClause: string; params: (string | number)[] } {
     const whereParts: string[] = [];
     const params: (string | number)[] = [];
 
     if (filters?.guildId) {
-      whereParts.push('guild_id = ?');
+      whereParts.push('wr.guild_id = ?');
       params.push(filters.guildId);
     }
 
     if (filters?.worldIds && filters.worldIds.length > 0) {
       const placeholders = filters.worldIds.map(() => '?').join(', ');
-      whereParts.push(`world_id IN (${placeholders})`);
+      whereParts.push(`wr.world_id IN (${placeholders})`);
       params.push(...filters.worldIds);
     }
 
     if (filters?.quality && filters.quality.length > 0) {
       const placeholders = filters.quality.map(() => '?').join(', ');
-      whereParts.push(`quality IN (${placeholders})`);
+      whereParts.push(`wr.quality IN (${placeholders})`);
       params.push(...filters.quality);
     }
 
     if (filters?.tags && filters.tags.length > 0) {
       for (const tag of filters.tags) {
         whereParts.push(
-          'EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)'
+          'EXISTS (SELECT 1 FROM json_each(wr.tags) WHERE value = ?)'
         );
         params.push(tag);
       }
@@ -343,7 +361,7 @@ export class WorldRepository {
     if (filters?.platforms && filters.platforms.length > 0) {
       for (const platform of filters.platforms) {
         whereParts.push(
-          'EXISTS (SELECT 1 FROM json_each(platforms) WHERE value = ?)'
+          'EXISTS (SELECT 1 FROM json_each(wr.platforms) WHERE value = ?)'
         );
         params.push(platform);
       }
@@ -354,7 +372,7 @@ export class WorldRepository {
       for (const term of terms) {
         const pattern = `%${term}%`;
         whereParts.push(
-          `(name LIKE ? OR author_name LIKE ? OR source_content LIKE ? OR world_id LIKE ? OR EXISTS (SELECT 1 FROM json_each(tags) WHERE value LIKE ?))`
+          `(wr.name LIKE ? OR wr.author_name LIKE ? OR wr.source_content LIKE ? OR wr.world_id LIKE ? OR EXISTS (SELECT 1 FROM json_each(wr.tags) WHERE value LIKE ?))`
         );
         params.push(pattern, pattern, pattern, pattern, pattern);
       }
@@ -364,22 +382,28 @@ export class WorldRepository {
       filters?.minCapacity !== undefined ||
       filters?.maxCapacity !== undefined
     ) {
-      whereParts.push('capacity IS NOT NULL');
+      whereParts.push('wr.capacity IS NOT NULL');
     }
 
     if (filters?.minCapacity !== undefined) {
-      whereParts.push('capacity >= ?');
+      whereParts.push('wr.capacity >= ?');
       params.push(filters.minCapacity);
     }
 
     if (filters?.maxCapacity !== undefined) {
-      whereParts.push('capacity <= ?');
+      whereParts.push('wr.capacity <= ?');
       params.push(filters.maxCapacity);
     }
 
     if (filters?.dayRange !== undefined && filters.dayRange > 0) {
       whereParts.push(
-        `COALESCE(internal_add_date, created_at) >= CAST(strftime('%s', 'now', '-${filters.dayRange} days') AS INTEGER)`
+        `COALESCE(wr.internal_add_date, wr.created_at) >= CAST(strftime('%s', 'now', '-${filters.dayRange} days') AS INTEGER)`
+      );
+    }
+
+    if (filters?.highPriorityOnly) {
+      whereParts.push(
+        'EXISTS (SELECT 1 FROM high_priority_worlds hp2 WHERE hp2.world_id = wr.world_id AND hp2.guild_id = wr.guild_id)'
       );
     }
 
@@ -408,16 +432,24 @@ export class WorldRepository {
       maxCapacity?: number;
       worldIds?: string[];
       dayRange?: number;
+      highPriorityOnly?: boolean;
     }
   ): { rows: WorldRecord[]; total: number } {
     const { whereClause, params } = this.buildWhereClause(filters);
 
-    const countSql = `SELECT COUNT(*) as total FROM world_records ${whereClause}`;
+    const countSql = `SELECT COUNT(*) as total FROM world_records wr ${whereClause}`;
     const countStmt = this.db.prepare(countSql);
     const countRow = countStmt.get(...params) as { total: number } | undefined;
     const total = countRow?.total ?? 0;
 
-    const selectSql = `SELECT * FROM world_records ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+    const selectSql = `
+      SELECT wr.*, (hp.world_id IS NOT NULL) AS high_priority
+      FROM world_records wr
+      LEFT JOIN high_priority_worlds hp
+        ON hp.world_id = wr.world_id AND hp.guild_id = wr.guild_id
+      ${whereClause}
+      ORDER BY wr.created_at DESC LIMIT ? OFFSET ?
+    `;
     const selectStmt = this.db.prepare(selectSql);
     const rows = selectStmt.all(...params, limit, offset) as Record<
       string,

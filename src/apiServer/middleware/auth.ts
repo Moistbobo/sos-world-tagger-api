@@ -7,7 +7,7 @@ import {
 import type { Permission } from '../../auth/permissions';
 import logger from '../../logger';
 
-interface TokenRequest extends Request {
+export interface TokenRequest extends Request {
   token?: ApiTokenRecord;
 }
 
