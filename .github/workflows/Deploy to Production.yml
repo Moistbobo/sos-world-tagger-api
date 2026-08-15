@@ -63,6 +63,10 @@ jobs:
             git reset --hard origin/production
             pnpm install
             pnpm exec tsc
+            node dist/scripts/backup-db.js || echo "WARN: deploy-time DB backup failed, continuing deploy"
+            NODE_BIN="$(command -v node)"
+            CRON_CMD="cd /home/world-tagger/release/sos-world-tagger-api && $NODE_BIN dist/scripts/backup-db.js >> backup-cron.log 2>&1"
+            ( crontab -l 2>/dev/null | grep -Fq 'backup-db.js' ) || ( ( crontab -l 2>/dev/null; echo "0 2 * * * $CRON_CMD" ) | crontab - ) || echo "WARN: could not install the daily cron backup entry"
             pm2 restart ecosystem.config.js
 
       - name: Create and push version tag
