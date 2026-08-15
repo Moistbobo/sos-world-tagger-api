@@ -33,6 +33,7 @@ Fill in `.env` with:
 | Variable | Description |
 |----------|-------------|
 | `VRC_USERNAME` / `VRC_PASSWORD` / `VRC_TOTP_KEY` | VRChat credentials used to fetch world data on add |
+| `WORLD_NAME_MATCHERS` / `AUTHOR_NAME_MATCHERS` | Comma-separated label terms for extracting world/author names from plain-text tweets |
 | `API_PORT` / `API_HOST` | Bind address, defaults `3000` / `0.0.0.0` |
 | `API_ALLOWED_ORIGINS` | Comma-separated allowed `Origin` values. Leave empty to allow any. |
 | `API_ALLOWED_IPS` | Comma-separated allowed source IPs. Leave empty to skip. |
@@ -56,13 +57,20 @@ pnpm format       # prettier
 
 Full documentation lives in [docs/API.md](docs/API.md).
 
-Read endpoints (unchanged from the bot's embedded API):
+Read endpoints:
 
 - `GET /api/health`
 - `GET /api/worlds` (paginated, filterable)
+- `GET /api/worlds/search?name=...` (live VRChat world search by name)
 - `GET /api/worlds/:worldId`
 - `GET /api/tags`
 - `GET /api/meta`
+
+Extraction endpoint:
+
+- `POST /api/worlds/extract` — resolve world IDs from message content
+  (direct links, Twitter/X links, plain-text world names). Body:
+  `{ content }`.
 
 Mutation endpoints:
 
@@ -73,8 +81,11 @@ Mutation endpoints:
 - `DELETE /api/worlds/:worldId` — delete a world. Body: `{ guildId }`.
 - `PUT /api/worlds/:worldId/quality` — set quality. Body:
   `{ guildId, quality: 'good' | 'bad' }`.
-- `PUT /api/worlds/:worldId/tags` — set tags. Body:
-  `{ guildId, tags: string[], sourceContent: string | null }`.
+- `PUT /api/worlds/:worldId/tags` — recompute tags from source content. Body:
+  `{ guildId, sourceContent: string | null, tagSource?: string }`. Tags are
+  extracted server-side (from `tagSource` when provided, else `sourceContent`);
+  `sourceContent` is stored verbatim. The response includes the computed
+  `tags`.
 
 ## Future work
 

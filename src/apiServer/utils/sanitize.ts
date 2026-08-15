@@ -16,6 +16,7 @@ export function sanitizeRecord(raw: WorldRecord) {
     authorName: raw.authorName,
     capacity: raw.capacity,
     platforms: raw.platforms,
+    packageSizes: raw.packageSizes,
     tags: raw.tags,
     imageUrl: raw.imageUrl,
     vrchatUrl: buildWorldUrl(raw.worldId),
