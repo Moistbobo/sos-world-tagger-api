@@ -32,4 +32,5 @@ db.json
 db.json.back
 db_original.json
 worlds.db*
+backups/
 dist
