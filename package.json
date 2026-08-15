@@ -17,7 +17,8 @@
     "role:list": "jiti src/tokens/cli.ts role:list",
     "role:create": "jiti src/tokens/cli.ts role:create",
     "role:update": "jiti src/tokens/cli.ts role:update",
-    "backfill:sizes": "jiti src/scripts/backfill-package-sizes.ts"
+    "backfill:sizes": "jiti src/scripts/backfill-package-sizes.ts",
+    "backup:db": "jiti src/scripts/backup-db.ts"
   },
   "license": "ISC",
   "devDependencies": {
