@@ -467,21 +467,28 @@ export class WorldRepository {
    * support across all world records. Desktop support is counted via the
    * `standalonewindows` platform value that VRChat uses for PC/Desktop worlds.
    */
-  getMetadataCounts(): {
+  getMetadataCounts(options?: { includeHighPriorityCount?: boolean }): {
     qualityGood: number;
     qualityBad: number;
     platformDesktop: number;
     platformAndroid: number;
     platformiOS: number;
+    highPriorityCount?: number;
   } {
     const qualitySql = `
       SELECT
         (SELECT COUNT(*) FROM world_records WHERE quality = 'good') AS qualityGood,
         (SELECT COUNT(*) FROM world_records WHERE quality = 'bad') AS qualityBad
+        ${
+          options?.includeHighPriorityCount === true
+            ? `, (SELECT COUNT(*) FROM high_priority_worlds) AS highPriorityCount`
+            : ''
+        }
     `;
     const qualityStmt = this.db.prepare(qualitySql);
     const qualityRow = qualityStmt.get() as
-      { qualityGood: number; qualityBad: number } | undefined;
+      | { qualityGood: number; qualityBad: number; highPriorityCount?: number }
+      | undefined;
 
     const platformSql = `
       SELECT value AS platform, COUNT(*) AS count
@@ -499,13 +506,24 @@ export class WorldRepository {
       platformRows.map((r) => [r.platform, r.count])
     );
 
-    return {
+    const counts: {
+      qualityGood: number;
+      qualityBad: number;
+      platformDesktop: number;
+      platformAndroid: number;
+      platformiOS: number;
+      highPriorityCount?: number;
+    } = {
       qualityGood: qualityRow?.qualityGood ?? 0,
       qualityBad: qualityRow?.qualityBad ?? 0,
       platformDesktop: platformCounts.get('standalonewindows') ?? 0,
       platformAndroid: platformCounts.get('android') ?? 0,
       platformiOS: platformCounts.get('ios') ?? 0
     };
+    if (options?.includeHighPriorityCount === true) {
+      counts.highPriorityCount = qualityRow?.highPriorityCount ?? 0;
+    }
+    return counts;
   }
 
   /**

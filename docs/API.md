@@ -297,7 +297,8 @@ GET /api/meta
 ```
 
 Returns high-level dataset counts for quality ratings and platform support
-across all world records.
+across all world records. Tokens with `worlds:write` also receive
+`highPriorityCount`.
 
 **Response**
 
@@ -307,9 +308,12 @@ across all world records.
   "qualityBad": 12,
   "platformDesktop": 80,
   "platformAndroid": 45,
-  "platformiOS": 6
+  "platformiOS": 6,
+  "highPriorityCount": 7
 }
 ```
+
+`highPriorityCount` is present only for tokens with `worlds:write`.
 
 ---
 
