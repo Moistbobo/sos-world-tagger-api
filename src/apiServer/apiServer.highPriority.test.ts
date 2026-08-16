@@ -59,6 +59,7 @@ const GUILD_ID = 'guild-1';
 
 const WORLD_ROW = {
   worldId: WORLD_ID,
+  guildId: GUILD_ID,
   name: 'Spooky Mansion',
   authorName: 'GhostDev',
   capacity: 16,
@@ -343,6 +344,44 @@ describe('High priority worlds API', () => {
 
       expect(response.status).toBe(200);
       expect(response.body).not.toHaveProperty('quality');
+    });
+  });
+
+  describe('GET /api/worlds guildId field', () => {
+    it('includes guildId for worlds:write tokens', async () => {
+      const response = await request(app).get('/api/worlds').set(AUTH);
+
+      expect(response.status).toBe(200);
+      expect(response.body.worlds[0].guildId).toBe(GUILD_ID);
+    });
+
+    it('omits guildId for viewer tokens', async () => {
+      mockTokenRepo(['worlds:read', 'tags:read', 'meta:read']);
+
+      const response = await request(app).get('/api/worlds').set(AUTH);
+
+      expect(response.status).toBe(200);
+      expect(response.body.worlds[0]).not.toHaveProperty('guildId');
+    });
+
+    it('includes guildId on the detail route for worlds:write tokens', async () => {
+      const response = await request(app)
+        .get(`/api/worlds/${WORLD_ID}`)
+        .set(AUTH);
+
+      expect(response.status).toBe(200);
+      expect(response.body.guildId).toBe(GUILD_ID);
+    });
+
+    it('omits guildId on the detail route for viewer tokens', async () => {
+      mockTokenRepo(['worlds:read', 'tags:read', 'meta:read']);
+
+      const response = await request(app)
+        .get(`/api/worlds/${WORLD_ID}`)
+        .set(AUTH);
+
+      expect(response.status).toBe(200);
+      expect(response.body).not.toHaveProperty('guildId');
     });
   });
 
