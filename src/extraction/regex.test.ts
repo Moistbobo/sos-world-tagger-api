@@ -232,6 +232,18 @@ describe('regex', () => {
           customMatchers.tetra_moon.getAuthorName('ワールド　x\nPlain line')
         ).toBeNull();
       });
+
+      it('finds world/author lines even when they follow intro text', () => {
+        const content =
+          'おひるー！\n今頃私はヒマワリ畑へお出かけしているはず！\n' +
+          '\nワールド　夏の痕跡 -Summer Traces-\n作者様　　mackerel_misogi';
+        expect(customMatchers.tetra_moon.getWorldName(content)).toBe(
+          '夏の痕跡 -Summer Traces-'
+        );
+        expect(customMatchers.tetra_moon.getAuthorName(content)).toBe(
+          'mackerel_misogi'
+        );
+      });
     });
 
     describe('jhn_takashi2020', () => {
@@ -357,6 +369,53 @@ describe('regex', () => {
         ).toBeNull();
       });
     });
+
+    describe('Katu_VRC', () => {
+      const exampleTweet =
+        'BLUE STARS　フリー交流会　観覧\n' +
+        'ヘリ、飛行機(ｼﾞｪｯﾄ/ﾚｼﾌﾟﾛ)、戦車etc,,わちゃわちゃ賑やかな仙台空港を遊覧\n' +
+        '精巧なEC225かっこいい✨\n' +
+        'ありがとうございました\n' +
+        '\n' +
+        'ワールド：JVG Sendai Air Station 【仮想保安庁 仙台航空基地】By Oppailot\n' +
+        '#VRCAviation #VRC_BLUE_STARS #VRChat';
+
+      it('getWorldName strips ワールド： prefix and trailing By author', () => {
+        expect(customMatchers.Katu_VRC.getWorldName(exampleTweet)).toBe(
+          'JVG Sendai Air Station 【仮想保安庁 仙台航空基地】'
+        );
+      });
+
+      it('getAuthorName extracts the name after By', () => {
+        expect(customMatchers.Katu_VRC.getAuthorName(exampleTweet)).toBe(
+          'Oppailot'
+        );
+      });
+
+      it('handles By without preceding space', () => {
+        const content = 'ワールド：Some World【別名】By AuthorName\n#VRChat';
+        expect(customMatchers.Katu_VRC.getWorldName(content)).toBe(
+          'Some World【別名】'
+        );
+        expect(customMatchers.Katu_VRC.getAuthorName(content)).toBe(
+          'AuthorName'
+        );
+      });
+
+      it('returns null for empty content', () => {
+        expect(customMatchers.Katu_VRC.getWorldName('')).toBeNull();
+        expect(customMatchers.Katu_VRC.getAuthorName('')).toBeNull();
+      });
+
+      it('returns null when ワールド line or By author is missing', () => {
+        expect(
+          customMatchers.Katu_VRC.getWorldName('No world line')
+        ).toBeNull();
+        expect(
+          customMatchers.Katu_VRC.getAuthorName('ワールド：World Only')
+        ).toBeNull();
+      });
+    });
   });
 
   describe('extractWithCustomMatcher', () => {
@@ -411,6 +470,24 @@ describe('regex', () => {
       });
     });
 
+    it('matches tetra_moon with world/author after intro text', () => {
+      const tetraTweet =
+        'おひるー！\n今頃私はヒマワリ畑へお出かけしているはず！\n' +
+        'きっと晴れで良い感じの写真を撮れているはず！\n' +
+        '晴れていて欲しいなぁー！\n' +
+        '\n' +
+        'ワールド　夏の痕跡 -Summer Traces-\n' +
+        '作者様　　mackerel_misogi';
+      const result = extractWithCustomMatcher(
+        'https://x.com/tetra_moon/status/123',
+        tetraTweet
+      );
+      expect(result).toEqual({
+        worldName: '夏の痕跡 -Summer Traces-',
+        authorName: 'mackerel_misogi'
+      });
+    });
+
     it('matches yonesuke2 and returns world + author', () => {
       const yonesukeTweet =
         'Valhalla Garden 星屑の庭\n' +
@@ -455,6 +532,25 @@ describe('regex', () => {
       expect(result).toEqual({
         worldName: 'Speed Puzzler （jigsaws done right）',
         authorName: 'PlayerBush001'
+      });
+    });
+
+    it('matches Katu_VRC and returns world + author', () => {
+      const katuTweet =
+        'BLUE STARS　フリー交流会　観覧\n' +
+        'ヘリ、飛行機(ｼﾞｪｯﾄ/ﾚｼﾌﾟﾛ)、戦車etc,,わちゃわちゃ賑やかな仙台空港を遊覧\n' +
+        '精巧なEC225かっこいい✨\n' +
+        'ありがとうございました\n' +
+        '\n' +
+        'ワールド：JVG Sendai Air Station 【仮想保安庁 仙台航空基地】By Oppailot\n' +
+        '#VRCAviation #VRC_BLUE_STARS #VRChat';
+      const result = extractWithCustomMatcher(
+        'https://x.com/Katu_VRC/status/2088781152698208349',
+        katuTweet
+      );
+      expect(result).toEqual({
+        worldName: 'JVG Sendai Air Station 【仮想保安庁 仙台航空基地】',
+        authorName: 'Oppailot'
       });
     });
 

@@ -40,21 +40,24 @@ export const customMatchers = {
       return afterBy || null;
     }
   },
-  // TODO: update
   tetra_moon: {
     getWorldName: (content: string) => {
       if (!content) return null;
-      const line = content.split('\n')[0]?.trim();
-      if (!line) return null;
-      const m = line.match(/^ワールド[\s\u3000]+(.+)$/);
-      return m?.[1]?.trim() ?? null;
+      for (const raw of content.split('\n')) {
+        const line = raw.trim();
+        const m = line.match(/^ワールド[\s\u3000]+(.+)$/);
+        if (m) return m[1].trim() || null;
+      }
+      return null;
     },
     getAuthorName: (content: string) => {
       if (!content) return null;
-      const line = content.split('\n')[1]?.trim();
-      if (!line) return null;
-      const m = line.match(/^作者様[\s\u3000]+(.+)$/);
-      return m?.[1]?.trim() ?? null;
+      for (const raw of content.split('\n')) {
+        const line = raw.trim();
+        const m = line.match(/^作者様[\s\u3000]+(.+)$/);
+        if (m) return m[1].trim() || null;
+      }
+      return null;
     }
   },
   jhn_takashi2020: {
@@ -81,6 +84,42 @@ export const customMatchers = {
       if (!line) return null;
       const afterBy = line.replace(/^By\s*[:：]?\s*/i, '').trim();
       return afterBy || null;
+    }
+  },
+  Katu_VRC: {
+    getWorldName: (content: string) => {
+      if (!content) return null;
+      for (const raw of content.split('\n')) {
+        const line = raw.trim();
+        const m = line.match(/^ワールド\s*[:：]?\s*(.+)$/);
+        if (!m) continue;
+        const afterPrefix = m[1].trim();
+        const byMatches = [...afterPrefix.matchAll(/\bBy\s+/gi)];
+        const byMatch = byMatches[byMatches.length - 1];
+        const name = byMatch
+          ? afterPrefix.slice(0, byMatch.index).trim()
+          : afterPrefix;
+        return name || null;
+      }
+      return null;
+    },
+    getAuthorName: (content: string) => {
+      if (!content) return null;
+      for (const raw of content.split('\n')) {
+        const line = raw.trim();
+        const m = line.match(/^ワールド\s*[:：]?\s*(.+)$/);
+        if (!m) continue;
+        const afterPrefix = m[1].trim();
+        const byMatches = [...afterPrefix.matchAll(/\bBy\s+/gi)];
+        const byMatch = byMatches[byMatches.length - 1];
+        if (!byMatch) return null;
+        const author = afterPrefix
+          .slice(byMatch.index! + byMatch[0].length)
+          .replace(/\s*#.*$/g, '')
+          .trim();
+        return author || null;
+      }
+      return null;
     }
   },
   fox_yata9: {
