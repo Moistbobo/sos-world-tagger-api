@@ -13,6 +13,9 @@ export function sanitizeRecord(
   raw: WorldRecord,
   options?: { includeHighPriority?: boolean; includeQuality?: boolean }
 ) {
+  const includeCuratorFields =
+    options?.includeQuality === true || options?.includeHighPriority === true;
+
   return {
     worldId: raw.worldId,
     name: raw.name,
@@ -29,6 +32,7 @@ export function sanitizeRecord(
     ...(options?.includeHighPriority === true && {
       highPriority: raw.highPriority ?? false
     }),
+    ...(includeCuratorFields && { guildId: raw.guildId }),
     createdAt: toDateString(raw.createdAt),
     internalAddDate: toDateString(raw.internalAddDate ?? undefined)
   };

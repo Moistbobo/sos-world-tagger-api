@@ -185,8 +185,9 @@ Returns a paginated, filterable list of world records.
 }
 ```
 
-The `quality` and `highPriority` fields are present only for tokens with the
-`worlds:write` permission; viewer tokens receive the record without them.
+The `quality`, `highPriority`, and `guildId` fields are present only for
+tokens with the `worlds:write` permission; viewer tokens receive the record
+without them.
 
 All filters combine with AND logic. Example:
 
@@ -247,8 +248,8 @@ GET /api/worlds/:worldId
 ```
 
 Returns the most recent record for a specific VRChat world ID. The
-`quality` and `highPriority` fields follow the same rule as `GET /api/worlds`:
-present only for tokens with `worlds:write`.
+`quality`, `highPriority`, and `guildId` fields follow the same rule as
+`GET /api/worlds`: present only for tokens with `worlds:write`.
 
 **Path parameter**
 
@@ -459,7 +460,8 @@ PUT /api/worlds/:worldId/quality
 ```
 
 Sets the quality rating (`good` / `bad`) on the `(worldId, guildId)` record.
-This is the 👍/👎 reaction flow. No-op when the quality is unchanged.
+This is the 👍/👎 reaction flow. Send `"quality": null` to clear the rating.
+No-op when the quality is unchanged.
 
 **Request body**
 
@@ -654,11 +656,12 @@ Each world object returned by the API has the following fields:
 | `vrchatUrl`       | string                   | Link to the world on the VRChat website. |
 | `quality`         | `"good"` \| `"bad"` \| null | Manual quality rating (if set). Present only for tokens with `worlds:write`. |
 | `highPriority`    | boolean                 | Whether the world is on the high-priority list. Present only for tokens with `worlds:write`. |
+| `guildId`         | string                   | Discord guild the record belongs to. Present only for tokens with `worlds:write`. |
 | `createdAt`       | string \| undefined      | ISO 8601 timestamp of when the record was created. |
 | `internalAddDate` | string \| null           | ISO 8601 timestamp of when the world was originally tagged, if known. |
 
-Internal fields such as `guildId`, `messageId`, `sourceContent`, and
-`vrchatData` are intentionally stripped from API responses.
+Internal fields such as `messageId`, `sourceContent`, and `vrchatData` are
+intentionally stripped from API responses.
 
 ---
 

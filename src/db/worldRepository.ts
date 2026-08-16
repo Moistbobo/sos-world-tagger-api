@@ -218,14 +218,14 @@ export class WorldRepository {
   }
 
   /**
-   * Set the quality ('good' | 'bad') on a specific world record.
+   * Set the quality ('good' | 'bad' | null) on a specific world record.
    * Preserves existing fields; only updates quality and updated_at.
    * Skips the UPDATE if the quality value is unchanged.
    */
   updateQuality(
     worldId: string,
     guildId: string,
-    quality: 'good' | 'bad'
+    quality: 'good' | 'bad' | null
   ): boolean {
     const existing = this.getByWorldAndGuild(worldId, guildId);
     if (!existing) {

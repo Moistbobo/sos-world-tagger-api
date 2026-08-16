@@ -13,7 +13,7 @@ export interface DeleteWorldBody {
 
 export interface UpdateQualityBody {
   guildId: string;
-  quality: 'good' | 'bad';
+  quality: 'good' | 'bad' | null;
   messageTimestamp?: number;
 }
 
@@ -37,6 +37,10 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isQualityValue(value: unknown): value is 'good' | 'bad' | null {
+  return value === 'good' || value === 'bad' || value === null;
 }
 
 export function isValidWorldId(value: unknown): value is string {
@@ -88,7 +92,7 @@ export function parseUpdateQualityBody(
 ): UpdateQualityBody | null {
   if (!isObject(body)) return null;
   if (!isNonEmptyString(body.guildId)) return null;
-  if (body.quality !== 'good' && body.quality !== 'bad') return null;
+  if (!isQualityValue(body.quality)) return null;
   const messageTimestamp = body.messageTimestamp;
   if (
     messageTimestamp !== undefined &&
