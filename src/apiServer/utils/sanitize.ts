@@ -9,7 +9,13 @@ function buildWorldUrl(worldId: string): string {
   return `https://vrchat.com/home/world/${worldId}`;
 }
 
-export function sanitizeRecord(raw: WorldRecord) {
+export function sanitizeRecord(
+  raw: WorldRecord,
+  options?: { includeHighPriority?: boolean; includeQuality?: boolean }
+) {
+  const includeCuratorFields =
+    options?.includeQuality === true || options?.includeHighPriority === true;
+
   return {
     worldId: raw.worldId,
     name: raw.name,
@@ -20,7 +26,13 @@ export function sanitizeRecord(raw: WorldRecord) {
     tags: raw.tags,
     imageUrl: raw.imageUrl,
     vrchatUrl: buildWorldUrl(raw.worldId),
-    quality: raw.quality ?? null,
+    ...(options?.includeQuality === true && {
+      quality: raw.quality ?? null
+    }),
+    ...(options?.includeHighPriority === true && {
+      highPriority: raw.highPriority ?? false
+    }),
+    ...(includeCuratorFields && { guildId: raw.guildId }),
     createdAt: toDateString(raw.createdAt),
     internalAddDate: toDateString(raw.internalAddDate ?? undefined)
   };

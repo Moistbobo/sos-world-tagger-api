@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getWorldRepository } from '../../db/worldRepository';
+import { getHighPriorityRepository } from '../../db/highPriorityRepository';
 import { addWorld, WorldServiceError } from '../../worlds/service';
 import { extractAllWorldIdsFromMessage } from '../../extraction/pipeline';
 import { extractTags } from '../../tags/extractor';
@@ -11,7 +12,7 @@ import {
   parseUpdateQualityBody,
   parseUpdateTagsBody
 } from '../utils/validation';
-import { requirePermission } from '../middleware/auth';
+import { requirePermission, type TokenRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -57,7 +58,7 @@ router.post(
         return response.status(200).send({
           duplicate: true,
           existingMessageId: result.existingMessageId,
-          world: sanitizeRecord(result.world)
+          world: sanitizeRecord(result.world, { includeQuality: true })
         });
       }
       return response.status(201).send({
@@ -148,6 +149,61 @@ router.put(
       body.sourceContent
     );
     response.send({ updated, tags });
+  }
+);
+
+// PUT /api/worlds/:worldId/high-priority
+router.put(
+  '/api/worlds/:worldId/high-priority',
+  requirePermission('worlds:write'),
+  (request: TokenRequest, response) => {
+    const { worldId } = request.params as { worldId: string };
+    const body = parseGuildIdBody(request.body);
+    if (!body) {
+      return response
+        .status(400)
+        .send({ error: 'Invalid body. Expected { guildId }' });
+    }
+
+    const repo = getWorldRepository();
+    const exists = repo.getByWorldAndGuild(worldId, body.guildId);
+    if (!exists) {
+      return response.status(404).send({ error: 'World not found' });
+    }
+
+    const { added } = getHighPriorityRepository().add(
+      worldId,
+      body.guildId,
+      request.token?.id
+    );
+    response.send({ added });
+  }
+);
+
+// DELETE /api/worlds/:worldId/high-priority
+router.delete(
+  '/api/worlds/:worldId/high-priority',
+  requirePermission('worlds:write'),
+  (request, response) => {
+    const { worldId } = request.params as { worldId: string };
+    const body = parseGuildIdBody(request.body);
+    if (!body) {
+      return response
+        .status(400)
+        .send({ error: 'Invalid body. Expected { guildId }' });
+    }
+
+    const repo = getWorldRepository();
+    const exists = repo.getByWorldAndGuild(worldId, body.guildId);
+    if (!exists) {
+      return response.status(404).send({ error: 'World not found' });
+    }
+
+    const { removed } = getHighPriorityRepository().remove(
+      worldId,
+      body.guildId
+    );
+    response.send({ removed });
   }
 );
 

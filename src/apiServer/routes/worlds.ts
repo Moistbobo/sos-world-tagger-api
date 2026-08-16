@@ -3,14 +3,14 @@ import { getWorldRepository } from '../../db/worldRepository';
 import { searchWorldsByName } from '../../vrchat/client';
 import { parseIntegerParam, parseStringListQuery } from '../utils/queryParams';
 import { sanitizeRecord } from '../utils/sanitize';
-import { requirePermission } from '../middleware/auth';
+import { requirePermission, type TokenRequest } from '../middleware/auth';
 
 const router = Router();
 
 router.get(
   '/api/worlds',
   requirePermission('worlds:read'),
-  (request, response) => {
+  (request: TokenRequest, response) => {
     const query = request.query as Record<string, unknown>;
 
     const limit = Math.min(Number(query.limit ?? 50), 500);
@@ -32,6 +32,18 @@ router.get(
       : query.quality && (query.quality === 'good' || query.quality === 'bad')
         ? [String(query.quality) as 'good' | 'bad']
         : undefined;
+
+    const highPriority =
+      query.highPriority === 'true' || query.highPriority === 'false'
+        ? query.highPriority === 'true'
+        : undefined;
+
+    const canManage =
+      request.token?.role.permissions.includes('worlds:write') ?? false;
+
+    if (highPriority === true && !canManage) {
+      return response.status(403).send({ error: 'Forbidden' });
+    }
 
     let minCapacity: number | undefined;
     let maxCapacity: number | undefined;
@@ -72,6 +84,7 @@ router.get(
       maxCapacity?: number;
       worldIds?: string[];
       dayRange?: number;
+      highPriorityOnly?: boolean;
     } = {};
     if (tags) filters.tags = tags;
     if (platforms) filters.platforms = platforms;
@@ -80,6 +93,7 @@ router.get(
     if (minCapacity !== undefined) filters.minCapacity = minCapacity;
     if (maxCapacity !== undefined) filters.maxCapacity = maxCapacity;
     if (dayRange > 0) filters.dayRange = dayRange;
+    if (highPriority === true) filters.highPriorityOnly = true;
 
     const search =
       typeof query.search === 'string' ? query.search.trim() : undefined;
@@ -95,7 +109,12 @@ router.get(
       total,
       limit,
       offset,
-      worlds: rows.map(sanitizeRecord)
+      worlds: rows.map((row) =>
+        sanitizeRecord(row, {
+          includeHighPriority: canManage,
+          includeQuality: canManage
+        })
+      )
     });
   }
 );
@@ -143,7 +162,7 @@ router.get(
 router.get(
   '/api/worlds/:worldId',
   requirePermission('worlds:read'),
-  (request, response) => {
+  (request: TokenRequest, response) => {
     const { worldId } = request.params as { worldId: string };
     const matches = getWorldRepository().getByWorldId(worldId);
 
@@ -151,8 +170,16 @@ router.get(
       return response.status(404).send({ error: 'World not found' });
     }
 
+    const canManage =
+      request.token?.role.permissions.includes('worlds:write') ?? false;
+
     // Return first live match (most recent by created_at DESC)
-    response.send(sanitizeRecord(matches[0]));
+    response.send(
+      sanitizeRecord(matches[0], {
+        includeHighPriority: canManage,
+        includeQuality: canManage
+      })
+    );
   }
 );
 

@@ -82,9 +82,12 @@ pnpm role:update -- --name curator-v2 --add meta:read --remove tags:read
 | Permission | Routes |
 |------------|--------|
 | `worlds:read` | `GET /api/worlds`, `GET /api/worlds/search`, `GET /api/worlds/pairs`, `GET /api/worlds/:worldId`, `POST /api/worlds/extract` |
-| `worlds:write` | `POST /api/worlds`, `DELETE /api/worlds/:worldId`, `PUT /api/worlds/:worldId/quality`, `PUT /api/worlds/:worldId/tags` |
+| `worlds:write` | `POST /api/worlds`, `DELETE /api/worlds/:worldId`, `PUT /api/worlds/:worldId/quality`, `PUT /api/worlds/:worldId/tags`, `PUT /api/worlds/:worldId/high-priority`, `DELETE /api/worlds/:worldId/high-priority` |
 | `tags:read` | `GET /api/tags` |
 | `meta:read` | `GET /api/meta` |
+
+`GET /api/me` requires no specific permission — any valid token can read its own
+identity.
 
 ---
 
@@ -155,6 +158,7 @@ Returns a paginated, filterable list of world records.
 | `maxCapacity` | integer           | —       | —   | Maximum world capacity (inclusive). Must be ≥ 1 and ≤ 80. |
 | `worldId`     | string / string[] | —       | —   | Filter to specific world ID(s). Comma-separated or repeated. Exact match only. |
 | `dayRange`    | integer           | —       | 365 | Return only worlds tagged within the last N days. Values below `0` are treated as `0` (no filter); values above `365` are clamped to `365`. Tagged date uses `internal_add_date` when present, otherwise falls back to `created_at`. |
+| `highPriority` | boolean           | —       | —   | When `true`, return only high-priority worlds. Requires `worlds:write`; viewer tokens get `403 Forbidden`. |
 
 **Response**
 
@@ -174,11 +178,16 @@ Returns a paginated, filterable list of world records.
       "imageUrl": "https://api.vrchat.cloud/api/1/file/...",
       "vrchatUrl": "https://vrchat.com/home/world/wrld_abc123",
       "quality": "good",
+      "highPriority": true,
       "createdAt": "2025-06-01T12:00:00.000Z"
     }
   ]
 }
 ```
+
+The `quality`, `highPriority`, and `guildId` fields are present only for
+tokens with the `worlds:write` permission; viewer tokens receive the record
+without them.
 
 All filters combine with AND logic. Example:
 
@@ -238,7 +247,9 @@ world name (e.g. Twitter/X posts without a direct world link).
 GET /api/worlds/:worldId
 ```
 
-Returns the most recent record for a specific VRChat world ID.
+Returns the most recent record for a specific VRChat world ID. The
+`quality`, `highPriority`, and `guildId` fields follow the same rule as
+`GET /api/worlds`: present only for tokens with `worlds:write`.
 
 **Path parameter**
 
@@ -287,7 +298,8 @@ GET /api/meta
 ```
 
 Returns high-level dataset counts for quality ratings and platform support
-across all world records.
+across all world records. Tokens with `worlds:write` also receive
+`highPriorityCount`.
 
 **Response**
 
@@ -297,9 +309,12 @@ across all world records.
   "qualityBad": 12,
   "platformDesktop": 80,
   "platformAndroid": 45,
-  "platformiOS": 6
+  "platformiOS": 6,
+  "highPriorityCount": 7
 }
 ```
+
+`highPriorityCount` is present only for tokens with `worlds:write`.
 
 ---
 
@@ -445,7 +460,8 @@ PUT /api/worlds/:worldId/quality
 ```
 
 Sets the quality rating (`good` / `bad`) on the `(worldId, guildId)` record.
-This is the 👍/👎 reaction flow. No-op when the quality is unchanged.
+This is the 👍/👎 reaction flow. Send `"quality": null` to clear the rating.
+No-op when the quality is unchanged.
 
 **Request body**
 
@@ -522,6 +538,107 @@ combined input the live flow uses.
 
 ---
 
+### 12. Get Current Token
+
+```
+GET /api/me
+```
+
+Returns the identity of the authenticated token. No permission gate — any
+valid token (including `viewer`) can read its own identity.
+
+**Response** — status `200`:
+
+```json
+{
+  "name": "bot",
+  "role": "curator",
+  "permissions": ["worlds:read", "tags:read", "meta:read", "worlds:write"]
+}
+```
+
+**Errors**
+
+| Status | Body |
+|--------|------|
+| `401`  | `{ "error": "Unauthorized" }` |
+
+---
+
+### 13. Mark World High Priority
+
+```
+PUT /api/worlds/:worldId/high-priority
+```
+
+Adds the `(worldId, guildId)` record to the high-priority list. Idempotent:
+returns `added: false` when the world is already on the list. The record must
+exist in `world_records`.
+
+**Request body**
+
+```json
+{
+  "guildId": "123456789012345678"
+}
+```
+
+**Success** — status `200`:
+
+```json
+{
+  "added": true
+}
+```
+
+**Errors**
+
+| Status | Body |
+|--------|------|
+| `400`  | `{ "error": "Invalid body. Expected { guildId }" }` |
+| `401`  | `{ "error": "Unauthorized" }` |
+| `403`  | `{ "error": "Forbidden" }` |
+| `404`  | `{ "error": "World not found" }` |
+
+---
+
+### 14. Remove World High Priority
+
+```
+DELETE /api/worlds/:worldId/high-priority
+```
+
+Removes the `(worldId, guildId)` record from the high-priority list.
+Idempotent: returns `removed: false` when the world is not on the list. The
+record must exist in `world_records`.
+
+**Request body**
+
+```json
+{
+  "guildId": "123456789012345678"
+}
+```
+
+**Success** — status `200`:
+
+```json
+{
+  "removed": true
+}
+```
+
+**Errors**
+
+| Status | Body |
+|--------|------|
+| `400`  | `{ "error": "Invalid body. Expected { guildId }" }` |
+| `401`  | `{ "error": "Unauthorized" }` |
+| `403`  | `{ "error": "Forbidden" }` |
+| `404`  | `{ "error": "World not found" }` |
+
+---
+
 ## World Record Schema
 
 Each world object returned by the API has the following fields:
@@ -537,12 +654,14 @@ Each world object returned by the API has the following fields:
 | `tags`            | string[]                 | Tags applied to this world record. |
 | `imageUrl`        | string \| null           | Thumbnail image URL from VRChat API. |
 | `vrchatUrl`       | string                   | Link to the world on the VRChat website. |
-| `quality`         | `"good"` \| `"bad"` \| null | Manual quality rating (if set). |
+| `quality`         | `"good"` \| `"bad"` \| null | Manual quality rating (if set). Present only for tokens with `worlds:write`. |
+| `highPriority`    | boolean                 | Whether the world is on the high-priority list. Present only for tokens with `worlds:write`. |
+| `guildId`         | string                   | Discord guild the record belongs to. Present only for tokens with `worlds:write`. |
 | `createdAt`       | string \| undefined      | ISO 8601 timestamp of when the record was created. |
 | `internalAddDate` | string \| null           | ISO 8601 timestamp of when the world was originally tagged, if known. |
 
-Internal fields such as `guildId`, `messageId`, `sourceContent`, and
-`vrchatData` are intentionally stripped from API responses.
+Internal fields such as `messageId`, `sourceContent`, and `vrchatData` are
+intentionally stripped from API responses.
 
 ---
 
@@ -629,4 +748,23 @@ curl -X POST -H "Authorization: Bearer my-token" \
   -H "Content-Type: application/json" \
   -d '{"content": "https://x.com/someuser/status/123"}' \
   http://localhost:3000/api/worlds/extract
+
+# Current token identity
+curl -H "Authorization: Bearer my-token" \
+  http://localhost:3000/api/me
+
+# Mark / unmark a world as high priority
+curl -X PUT -H "Authorization: Bearer my-token" \
+  -H "Content-Type: application/json" \
+  -d '{"guildId": "123456789012345678"}' \
+  http://localhost:3000/api/worlds/wrld_abc123/high-priority
+
+curl -X DELETE -H "Authorization: Bearer my-token" \
+  -H "Content-Type: application/json" \
+  -d '{"guildId": "123456789012345678"}' \
+  http://localhost:3000/api/worlds/wrld_abc123/high-priority
+
+# List only high-priority worlds (worlds:write token required)
+curl -H "Authorization: Bearer my-token" \
+  "http://localhost:3000/api/worlds?highPriority=true"
 ```

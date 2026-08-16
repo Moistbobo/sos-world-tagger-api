@@ -56,6 +56,7 @@ function createMockRepo(overrides: Record<string, unknown> = {}) {
       rows: [
         {
           worldId: 'wrld_abc123',
+          guildId: 'guild-1',
           name: 'Spooky Mansion',
           authorName: 'GhostDev',
           capacity: 16,
@@ -74,6 +75,7 @@ function createMockRepo(overrides: Record<string, unknown> = {}) {
     getByWorldId: jest.fn(() => [
       {
         worldId: 'wrld_abc123',
+        guildId: 'guild-1',
         name: 'Spooky Mansion',
         authorName: 'GhostDev',
         capacity: 16,
@@ -259,11 +261,11 @@ describe('API Server', () => {
       expect(world.name).toBe('Spooky Mansion');
       expect(world.vrchatUrl).toBe('https://vrchat.com/home/world/wrld_abc123');
       expect(world.quality).toBe('good');
+      expect(world.guildId).toBe('guild-1');
       expect(world.packageSizes).toEqual([104.5, 78.2]);
       expect(world.createdAt).toBe('2024-06-01T16:00:00.000Z');
 
       // Server-identifying fields must be stripped
-      expect(world.guildId).toBeUndefined();
       expect(world.messageId).toBeUndefined();
       expect(world.sourceContent).toBeUndefined();
       expect(world.vrchatData).toBeUndefined();
@@ -352,9 +354,9 @@ describe('API Server', () => {
       expect(body.worldId).toBe('wrld_abc123');
       expect(body.vrchatUrl).toBe('https://vrchat.com/home/world/wrld_abc123');
       expect(body.quality).toBe('good');
+      expect(body.guildId).toBe('guild-1');
 
       // Stripped fields
-      expect(body.guildId).toBeUndefined();
       expect(body.sourceContent).toBeUndefined();
     });
 
@@ -462,6 +464,54 @@ describe('API Server', () => {
         platformAndroid: 45,
         platformiOS: 6
       });
+    });
+
+    it('includes the high priority count for curator tokens', async () => {
+      const getMetadataCounts = jest.fn(() => ({
+        qualityGood: 123,
+        qualityBad: 12,
+        platformDesktop: 80,
+        platformAndroid: 45,
+        platformiOS: 6,
+        highPriorityCount: 7
+      }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getMetadataCounts })
+      );
+
+      const response = await request(app)
+        .get('/api/meta')
+        .set('authorization', 'Bearer test-token');
+
+      expect(getMetadataCounts).toHaveBeenCalledWith({
+        includeHighPriorityCount: true
+      });
+      expect(response.body.highPriorityCount).toBe(7);
+    });
+
+    it('omits the high priority count for viewer tokens', async () => {
+      const getMetadataCounts = jest.fn(() => ({
+        qualityGood: 123,
+        qualityBad: 12,
+        platformDesktop: 80,
+        platformAndroid: 45,
+        platformiOS: 6
+      }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getMetadataCounts })
+      );
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read', 'tags:read', 'meta:read'])
+      );
+
+      const response = await request(app)
+        .get('/api/meta')
+        .set('authorization', 'Bearer test-token');
+
+      expect(getMetadataCounts).toHaveBeenCalledWith({
+        includeHighPriorityCount: false
+      });
+      expect(response.body.highPriorityCount).toBeUndefined();
     });
   });
 

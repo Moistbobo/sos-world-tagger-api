@@ -60,6 +60,7 @@ Full documentation lives in [docs/API.md](docs/API.md).
 Read endpoints:
 
 - `GET /api/health`
+- `GET /api/me` (current token: name, role, permissions)
 - `GET /api/worlds` (paginated, filterable)
 - `GET /api/worlds/search?name=...` (live VRChat world search by name)
 - `GET /api/worlds/:worldId`
@@ -86,6 +87,10 @@ Mutation endpoints:
   extracted server-side (from `tagSource` when provided, else `sourceContent`);
   `sourceContent` is stored verbatim. The response includes the computed
   `tags`.
+- `PUT /api/worlds/:worldId/high-priority` — mark a world high priority. Body:
+  `{ guildId }`. Returns `{ added: boolean }`; `false` when already marked.
+- `DELETE /api/worlds/:worldId/high-priority` — unmark a world. Body:
+  `{ guildId }`. Returns `{ removed: boolean }`; `false` when not marked.
 
 ## Future work
 

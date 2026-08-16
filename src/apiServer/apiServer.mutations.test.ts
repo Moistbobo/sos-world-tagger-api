@@ -385,6 +385,38 @@ describe('API mutations', () => {
       expect(response.status).toBe(400);
     });
 
+    it('clears quality with null and returns 200 with updated: true', async () => {
+      const updateQuality = jest.fn(() => true);
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({
+          getByWorldAndGuild: jest.fn(() => ({})),
+          updateQuality
+        })
+      );
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/quality`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', quality: null });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ updated: true });
+      expect(updateQuality).toHaveBeenCalledWith(
+        VALID_BODY.worldId,
+        'guild-1',
+        null
+      );
+    });
+
+    it('returns 400 when guildId is missing', async () => {
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/quality`)
+        .set(AUTH)
+        .send({ quality: 'good' });
+
+      expect(response.status).toBe(400);
+    });
+
     it('returns 404 when world does not exist', async () => {
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({ getByWorldAndGuild: jest.fn(() => undefined) })
