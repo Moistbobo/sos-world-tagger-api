@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getWorldRepository } from '../../db/worldRepository';
-import { requirePermission } from '../middleware/auth';
+import { requirePermission, type TokenRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -8,8 +8,14 @@ const router = Router();
 router.get(
   '/api/meta',
   requirePermission('meta:read'),
-  (_request, response) => {
-    response.send(getWorldRepository().getMetadataCounts());
+  (request: TokenRequest, response) => {
+    const canManage =
+      request.token?.role.permissions.includes('worlds:write') ?? false;
+    response.send(
+      getWorldRepository().getMetadataCounts({
+        includeHighPriorityCount: canManage
+      })
+    );
   }
 );
 

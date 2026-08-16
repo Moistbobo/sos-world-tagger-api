@@ -5,6 +5,7 @@ import worldsRoute from './routes/worlds';
 import tagsRoute from './routes/tags';
 import metaRoute from './routes/meta';
 import worldsMutationsRoute from './routes/worldsMutations';
+import meRoute from './routes/me';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { authMiddleware } from './middleware/auth';
 import { accessLogMiddleware } from './middleware/accessLog';
@@ -118,6 +119,7 @@ export function createApiServer(): Express {
   app.use(healthRoute);
   app.use(worldsRoute);
   app.use(worldsMutationsRoute);
+  app.use(meRoute);
   app.use(tagsRoute);
   app.use(metaRoute);
 

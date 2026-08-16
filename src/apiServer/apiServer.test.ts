@@ -463,6 +463,54 @@ describe('API Server', () => {
         platformiOS: 6
       });
     });
+
+    it('includes the high priority count for curator tokens', async () => {
+      const getMetadataCounts = jest.fn(() => ({
+        qualityGood: 123,
+        qualityBad: 12,
+        platformDesktop: 80,
+        platformAndroid: 45,
+        platformiOS: 6,
+        highPriorityCount: 7
+      }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getMetadataCounts })
+      );
+
+      const response = await request(app)
+        .get('/api/meta')
+        .set('authorization', 'Bearer test-token');
+
+      expect(getMetadataCounts).toHaveBeenCalledWith({
+        includeHighPriorityCount: true
+      });
+      expect(response.body.highPriorityCount).toBe(7);
+    });
+
+    it('omits the high priority count for viewer tokens', async () => {
+      const getMetadataCounts = jest.fn(() => ({
+        qualityGood: 123,
+        qualityBad: 12,
+        platformDesktop: 80,
+        platformAndroid: 45,
+        platformiOS: 6
+      }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getMetadataCounts })
+      );
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read', 'tags:read', 'meta:read'])
+      );
+
+      const response = await request(app)
+        .get('/api/meta')
+        .set('authorization', 'Bearer test-token');
+
+      expect(getMetadataCounts).toHaveBeenCalledWith({
+        includeHighPriorityCount: false
+      });
+      expect(response.body.highPriorityCount).toBeUndefined();
+    });
   });
 
   describe('Error handling', () => {

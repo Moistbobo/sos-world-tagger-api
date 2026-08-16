@@ -166,6 +166,22 @@ const MIGRATIONS: Migration[] = [
         );
       }
     }
+  },
+  {
+    name: '008_create_high_priority_worlds',
+    run: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS high_priority_worlds (
+          world_id          TEXT NOT NULL,
+          guild_id          TEXT NOT NULL,
+          added_at          INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+          added_by_token_id INTEGER REFERENCES api_tokens(id) ON DELETE SET NULL,
+          PRIMARY KEY (world_id, guild_id),
+          FOREIGN KEY (world_id, guild_id)
+            REFERENCES world_records(world_id, guild_id) ON DELETE CASCADE
+        );
+      `);
+    }
   }
 ];
 
